@@ -147,7 +147,7 @@ async def list_databases():
 
 
 @app.post("/upload")
-async def upload_db(file: UploadFile = File(...)):
+async def upload_db(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
 
     filename = file.filename.lower()
 
