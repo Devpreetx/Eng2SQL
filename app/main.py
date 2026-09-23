@@ -44,13 +44,10 @@ import uuid
 import pandas as pd
 from pydantic import BaseModel
 import sqlite3
-import io
-import re
 
-from fastapi import FastAPI, File, HTTPException, UploadFile, Header
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.db_utils import (
@@ -118,16 +115,6 @@ class SqlExecuteRequest(BaseModel):
     sql: str
 
 
-class QueryExportRequest(BaseModel):
-    db_id: str
-    sql: str
-    format: str = "csv"
-
-
-class SessionCleanupRequest(BaseModel):
-    upload_session_id: str
-
-
 def _get_db_or_404(db_id: str) -> dict:
     db = DBS.get(db_id)
     if not db:
@@ -160,10 +147,7 @@ async def list_databases():
 
 
 @app.post("/upload")
-async def upload_db(
-    file: UploadFile = File(...),
-    upload_session_id: str | None = Header(default=None, alias="X-Upload-Session-ID"),
-):
+async def upload_db(file: UploadFile = File(...)):
 
     filename = file.filename.lower()
 
@@ -252,16 +236,14 @@ async def upload_db(
             )
 
         DBS[db_id] = {
-            "path": path,
-            "schema": schema,
-            "pending": {},
-            "history": [],
-            "name": file.filename,
-            "source": "upload",
-            "upload_session_id": upload_session_id,
-        }
+        "path": path,
+        "schema": schema,
+        "pending": {},
+        "history": [],
+        "name": file.filename
+            }
 
-        _safe_index_schema(db_id, schema)
+        background_tasks.add_task(_safe_index_schema, db_id, schema)
 
         return {
             "db_id": db_id,
@@ -287,36 +269,8 @@ async def upload_db(
         )
 
     
-@app.post("/session/cleanup")
-async def cleanup_upload_session(req: SessionCleanupRequest):
-    """Delete databases uploaded by one browser page session."""
-    upload_session_id = (req.upload_session_id or "").strip()
-    if not upload_session_id:
-        return {"status": "ok", "deleted": 0}
-
-    deleted = 0
-    for current_db_id, db in list(DBS.items()):
-        if (db.get("source") == "upload" and
-                db.get("upload_session_id") == upload_session_id):
-            path = db.get("path")
-            try:
-                if path and os.path.exists(path):
-                    os.remove(path)
-            except OSError as e:
-                logger.warning(f"Could not remove temporary upload {path}: {e}")
-                continue
-
-            DBS.pop(current_db_id, None)
-            deleted += 1
-
-    logger.info(
-        f"SESSION CLEANUP: upload_session_id={upload_session_id}, deleted={deleted}"
-    )
-    return {"status": "ok", "deleted": deleted}
-
-
 @app.post("/database/create")
-async def create_database(name: str):
+async def create_database(name: str, background_tasks: BackgroundTasks):
     name = name.strip()
 
     if not name:
@@ -354,7 +308,7 @@ async def create_database(name: str):
             "name": safe_name
         }
 
-        _safe_index_schema(db_id, schema)
+        background_tasks.add_task(_safe_index_schema, db_id, schema)
 
         return {
             "db_id": db_id,
@@ -379,7 +333,7 @@ class CreateTableRequest(BaseModel):
     columns: list[dict]
 
 @app.post("/table/create")
-async def create_table(req: CreateTableRequest):
+async def create_table(req: CreateTableRequest, background_tasks: BackgroundTasks):
 
     db = _get_db_or_404(req.db_id)
 
@@ -450,7 +404,7 @@ async def create_table(req: CreateTableRequest):
 
         db["schema"] = extract_schema(db["path"])
 
-        _safe_index_schema(req.db_id, db["schema"])
+        background_tasks.add_task(_safe_index_schema, req.db_id, db["schema"])
 
         return {
             "status": "created",
@@ -818,7 +772,7 @@ async def sql_execute(req: SqlExecuteRequest):
 
 
 @app.post("/confirm")
-async def confirm(req: ConfirmRequest):
+async def confirm(req: ConfirmRequest, background_tasks: BackgroundTasks):
     db = _get_db_or_404(req.db_id)
 
     pending = db["pending"].pop(req.query_id, None)
@@ -870,7 +824,7 @@ async def confirm(req: ConfirmRequest):
 
     db["schema"] = extract_schema(db["path"])
 
-    _safe_index_schema(req.db_id, db["schema"])
+    background_tasks.add_task(_safe_index_schema, req.db_id, db["schema"])
 
     db["history"].append(
         {
@@ -934,126 +888,6 @@ async def get_history_detail(history_id: str):
     if record is None:
         raise HTTPException(404, "Unknown history_id.")
     return record
-
-
-# --------------------------------------------------------------------------
-# DATASET EXPORT
-# --------------------------------------------------------------------------
-
-def _export_dataframe_response(df: pd.DataFrame, filename_stem: str, export_format: str):
-    """
-    Convert a dataframe into a browser-downloadable CSV or XLSX response.
-    """
-    export_format = (export_format or "csv").lower().strip()
-
-    if export_format == "csv":
-        content = df.to_csv(index=False).encode("utf-8-sig")
-        return Response(
-            content=content,
-            media_type="text/csv; charset=utf-8",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename_stem}.csv"'
-            },
-        )
-
-    if export_format in {"xlsx", "excel"}:
-        buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="Data")
-        buffer.seek(0)
-
-        return StreamingResponse(
-            buffer,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename_stem}.xlsx"'
-            },
-        )
-
-    raise HTTPException(400, "Unsupported export format. Use csv or xlsx.")
-
-
-@app.get("/export/table/{db_id}/{table_name}")
-async def export_table(
-    db_id: str,
-    table_name: str,
-    format: str = "csv",
-):
-    """
-    Export the complete selected table as CSV or XLSX.
-
-    Unlike the table-preview endpoint, this exports ALL rows, not only
-    the current pagination page.
-    """
-    db = _get_db_or_404(db_id)
-
-    if table_name not in db["schema"]:
-        raise HTTPException(404, "Table not found.")
-
-    # Only allow a real table from the extracted schema. The identifier is
-    # quoted so names containing spaces/special SQLite characters remain safe.
-    quoted_table = '"' + table_name.replace('"', '""') + '"'
-
-    try:
-        conn = sqlite3.connect(db["path"])
-        df = pd.read_sql_query(f"SELECT * FROM {quoted_table}", conn)
-        conn.close()
-
-        safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "_", table_name).strip("_") or "dataset"
-        return _export_dataframe_response(df, safe_stem, format)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"TABLE EXPORT ERROR db_id={db_id}, table={table_name}: {e}")
-        raise HTTPException(500, f"Could not export table: {e}")
-
-
-@app.post("/export/query")
-async def export_query(req: QueryExportRequest):
-    """
-    Export the result of a SELECT query as CSV or XLSX.
-
-    Only a single SELECT statement is allowed. This endpoint does not
-    execute INSERT/UPDATE/DELETE/DDL statements.
-    """
-    db = _get_db_or_404(req.db_id)
-
-    sql_text = (req.sql or "").strip()
-    if not sql_text:
-        raise HTTPException(400, "SQL statement cannot be empty.")
-
-    statements = _split_sql_statements(sql_text)
-
-    if len(statements) != 1:
-        raise HTTPException(400, "Export supports exactly one SELECT statement.")
-
-    try:
-        validated = validate_statements(statements, set(db["schema"].keys()))
-    except ValueError as e:
-        raise HTTPException(400, str(e))
-    except Exception:
-        raise HTTPException(400, "SQL syntax error: could not validate the statement.")
-
-    if len(validated) != 1 or validated[0][2] != "select":
-        raise HTTPException(400, "Only SELECT queries can be exported.")
-
-    try:
-        result = run_select(db["path"], validated[0][0])
-        df = pd.DataFrame(result.get("rows", []))
-
-        # Preserve SELECT column order even when the query returns zero rows.
-        if result.get("columns"):
-            df = df.reindex(columns=result["columns"])
-
-        safe_stem = "query_result"
-        return _export_dataframe_response(df, safe_stem, req.format)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"QUERY EXPORT ERROR db_id={req.db_id}: {e}")
-        raise HTTPException(500, f"Could not export query result: {e}")
 
 
 @app.get("/download/{db_id}")
