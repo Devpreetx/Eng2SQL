@@ -612,24 +612,6 @@ table.result-table {
 .log::-webkit-scrollbar-track, .schema-panel::-webkit-scrollbar-track, .sidebar::-webkit-scrollbar-track,
 .history-list::-webkit-scrollbar-track { background: transparent; }
 
-/* ============ responsive ============ */
-
-@media (max-width: 720px) {
-  .app, .app.preview-open { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
-  .log { padding: 20px; }
-  .prompt-bar { padding: 12px 20px; }
-  .mode-tabs { padding: 12px 20px 0; }
-  .sql-workspace { padding: 16px 20px; }
-  .table-preview-panel {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    border-left: none;
-    height: 100vh;
-  }
-}
-
 /* ---------------- TABLE PREVIEW (right-side panel) ---------------- */
 
 .table-preview-panel {
@@ -1598,502 +1580,117 @@ table.result-table {
   flex-wrap: wrap;
 }
 
+
 /* ============================================================
-   HISTORY LAYOUT FIX
-   Keeps the sidebar inside the viewport and gives History
-   the remaining space so all history items can scroll.
+   SIDEBAR — single scrollable navigation
    ============================================================ */
 
-/* The sidebar itself should not become the scrolling container.
-   Individual sections handle their own scrolling. */
 .sidebar {
   height: 100vh;
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-lt) transparent;
 }
 
-/* Keep the database/schema sections compact so History gets
-   enough vertical space. */
+.sidebar::-webkit-scrollbar { width: 7px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--border-lt);
+  border-radius: 10px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+.brand,
+.upload-zone,
+.database-actions,
+.sidebar-footer {
+  flex-shrink: 0;
+}
+
+.databases-panel,
+.schema-panel {
+  flex-shrink: 0;
+  max-height: none !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
 .databases-panel {
-  max-height: 20vh;
-  min-height: 0;
-  overflow-y: auto;
+  padding: 16px 18px 8px;
+}
+
+#databaseList,
+.schema-tree {
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .schema-panel {
-  max-height: 22vh;
-  min-height: 0;
-  overflow-y: auto;
+  padding: 16px 18px;
 }
 
-/* History takes all remaining sidebar height. */
+.database-actions {
+  padding: 10px 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
 .history-panel {
-  flex: 1 1 auto;
-  min-height: 180px;
-  max-height: none;
-  min-width: 0;
+  flex: 0 0 auto;
+  min-height: 300px;
+  height: auto;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible !important;
+  padding: 16px 10px 12px;
 }
 
-/* Header/search/filter controls never shrink away. */
 .history-panel .schema-heading,
 .history-search-row,
 .history-filters {
   flex-shrink: 0;
 }
 
-/* The actual history records are the only part that scrolls. */
-.history-list {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 4px;
-}
-
-/* Make each history entry clearly visible and use the full width. */
-.history-item {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.history-item + .history-item {
-  margin-top: 2px;
-}
-
-/* Keep pagination visible at the bottom. */
-.history-pagination {
-  flex-shrink: 0;
-  min-height: 30px;
-}
-
-/* Slightly tighter history controls so more records fit. */
-.history-search-row {
-  margin-bottom: 6px;
-}
+.history-search-row { margin-bottom: 6px; }
 
 .history-filters {
+  gap: 4px;
   margin-bottom: 7px;
-  gap: 4px;
 }
 
-.history-filter-chip {
-  padding: 3px 8px;
-}
-
-/* Better history scrollbar. */
-.history-list::-webkit-scrollbar {
-  width: 5px;
-}
-
-.history-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.history-list::-webkit-scrollbar-thumb {
-  background: var(--border-lt);
-  border-radius: 10px;
-}
-
-.history-list {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-lt) transparent;
-}
-
-/* Footer stays pinned at the bottom. */
-.sidebar-footer {
-  flex-shrink: 0;
-}
-
-/* On shorter screens, give History priority over the
-   database/schema preview sections. */
-@media (max-height: 800px) and (min-width: 721px) {
-  .databases-panel {
-    max-height: 16vh;
-  }
-
-  .schema-panel {
-    max-height: 18vh;
-  }
-
-  .history-panel {
-    min-height: 190px;
-  }
-}
-
-/* Mobile sidebar: let the whole sidebar scroll because the
-   mobile layout intentionally stacks the sections. */
-@media (max-width: 720px) {
-  .sidebar {
-    height: auto;
-    max-height: 50vh;
-    overflow-y: auto;
-  }
-
-  .databases-panel {
-    max-height: 24vh;
-  }
-
-  .schema-panel {
-    max-height: 24vh;
-  }
-
-  .history-panel {
-    flex: 0 0 220px;
-    min-height: 220px;
-  }
-
-  .history-list {
-    min-height: 0;
-  }
-}
-/* ============================================================
-   ENG2SQL — FULL SIDEBAR NAVIGATION
-   ============================================================ */
-
-/* The entire left sidebar becomes one scrollable navigation area */
-.sidebar {
-  height: 100vh;
-  min-height: 0;
-  box-sizing: border-box;
-
-  display: flex;
-  flex-direction: column;
-
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-lt) transparent;
-
-  border-right: 1px solid var(--border);
-}
-
-/* Chrome / Edge scrollbar */
-.sidebar::-webkit-scrollbar {
-  width: 7px;
-}
-
-.sidebar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar::-webkit-scrollbar-thumb {
-  background: var(--border-lt);
-  border-radius: 10px;
-}
-
-.sidebar::-webkit-scrollbar-thumb:hover {
-  background: var(--text-faint);
-}
-
-
-/* ============================================================
-   TOP BRAND
-   ============================================================ */
-
-.brand {
-  flex-shrink: 0;
-}
-
-
-/* ============================================================
-   UPLOAD / DATABASE ACTION AREA
-   ============================================================ */
-
-.upload-zone {
-  flex-shrink: 0;
-}
-
-
-/* ============================================================
-   DATABASES
-   Remove internal scrolling.
-   Sidebar itself handles all scrolling.
-   ============================================================ */
-
-.databases-panel {
-  max-height: none !important;
-  height: auto !important;
-
-  flex-shrink: 0;
-
-  overflow: visible !important;
-
-  padding: 16px 18px 8px;
-}
-
-
-/* Database list should grow naturally */
-#databaseList {
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-
-/* ============================================================
-   SCHEMA
-   Remove the old 30vh restriction.
-   ============================================================ */
-
-.schema-panel {
-  max-height: none !important;
-  height: auto !important;
-
-  flex-shrink: 0;
-
-  overflow: visible !important;
-
-  padding: 16px 18px;
-}
-
-
-/* Schema tree */
-.schema-tree {
-  max-height: none !important;
-  overflow: visible !important;
-}
-
-
-/* ============================================================
-   CREATE TABLE BUTTON
-   ============================================================ */
-
-.database-actions {
-  flex-shrink: 0;
-
-  padding: 10px 10px 12px;
-
-  border-bottom: 1px solid var(--border);
-}
-
-
-/* ============================================================
-   HISTORY
-   This gets a proper usable area.
-   ============================================================ */
-
-.history-panel {
-  flex: 0 0 auto;
-
-  min-height: 300px;
-
-  height: auto;
-
-  display: flex;
-  flex-direction: column;
-
-  overflow: visible !important;
-
-  padding: 16px 10px 12px;
-}
-
-
-/* History heading */
-.history-panel .schema-heading {
-  flex-shrink: 0;
-}
-
-
-/* Search */
-.history-search-row {
-  flex-shrink: 0;
-}
-
-
-/* Filters */
-.history-filters {
-  flex-shrink: 0;
-
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-
-/* ============================================================
-   HISTORY LIST
-   No independent tiny scrollbar.
-   Let the whole sidebar scroll.
-   ============================================================ */
+.history-filter-chip { padding: 3px 8px; }
 
 .history-list {
   flex: none;
-
   height: auto;
   min-height: 100px;
   max-height: none !important;
-
   overflow: visible !important;
 }
 
-
-/* History item */
 .history-item {
   width: 100%;
   box-sizing: border-box;
 }
 
-
-/* ============================================================
-   HISTORY PAGINATION
-   ============================================================ */
+.history-item + .history-item { margin-top: 2px; }
 
 .history-pagination {
   flex-shrink: 0;
-
   min-height: 30px;
-
   margin-top: 8px;
 }
 
-
-/* ============================================================
-   CONNECTION FOOTER
-   Stays at bottom of sidebar content.
-   ============================================================ */
-
 .sidebar-footer {
-  flex-shrink: 0;
-
   position: sticky;
   bottom: 0;
-
   background: var(--panel);
-
   z-index: 5;
 }
 
-
-/* ============================================================
-   BETTER SECTION SEPARATION
-   ============================================================ */
-
-.databases-panel,
-.schema-panel,
-.database-actions,
-.history-panel {
-  box-sizing: border-box;
-}
-
-
-/* ============================================================
-   DESKTOP SIDEBAR WIDTH
-   ============================================================ */
-
-@media (min-width: 721px) {
-  .sidebar {
-    min-width: 220px;
-    width: 220px;
-  }
-}
-
-
-/* ============================================================
-   MOBILE
-   ============================================================ */
-
-@media (max-width: 720px) {
-  .sidebar {
-    height: auto;
-    max-height: 55vh;
-
-    overflow-y: auto;
-
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .databases-panel,
-  .schema-panel,
-  .history-panel {
-    max-height: none !important;
-  }
-
-  .history-panel {
-    min-height: 260px;
-  }
-
-  .sidebar-footer {
-    position: sticky;
-    bottom: 0;
-  }
-}
-/* ============================================================
-   WIDER SIDEBAR
-   ============================================================ */
-
-.sidebar {
-    width: 280px !important;
-    min-width: 280px !important;
-    max-width: 280px !important;
-}
-
-/* Keep the main content positioned after the wider sidebar */
-.main {
-    min-width: 0;
-}
-
-/* Prevent long database/table names from breaking the layout */
-.database-item,
-.schema-tree,
-.history-item {
-    min-width: 0;
-}
-
-.database-item,
-.schema-tree .table-node,
-.history-item {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Better space for database names */
-.database-item-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-/* ============================================================
-   WIDER SIDEBAR
-   ============================================================ */
-
-.sidebar {
-    width: 260px !important;
-    min-width: 260px !important;
-    max-width: 260px !important;
-}
-
-/* Keep the main content positioned after the wider sidebar */
-.main {
-    min-width: 0;
-}
-
-/* Prevent long database/table names from breaking the layout */
-.database-item,
-.schema-tree,
-.history-item {
-    min-width: 0;
-}
-
-.database-item,
-.schema-tree .table-node,
-.history-item {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Better space for database names */
-.database-item-name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
 /* ============================================================
    EXPORT BUTTONS — FORCE DARK ENG2SQL STYLE
    ============================================================ */
@@ -2247,333 +1844,233 @@ button.export-xlsx .export-icon {
     opacity: 0.55 !important;
     cursor: wait !important;
 }
+
 /* ============================================================
-   ENG2SQL MOBILE RESPONSIVE UI
+   MOBILE
    ============================================================ */
 
 @media (max-width: 720px) {
-
-    /* ---------- APP ---------- */
-
-    html,
-    body {
-        width: 100%;
-        min-width: 0;
-        overflow-x: hidden;
-    }
-
-    .app {
-        width: 100%;
-        min-width: 0;
-        height: 100dvh;
-
-        display: flex;
-        flex-direction: column;
-
-        overflow: hidden;
-    }
-
-
-    /* ---------- SIDEBAR ---------- */
-
-    .sidebar {
-        position: fixed;
-
-        top: 0;
-        left: 0;
-
-        width: min(86vw, 320px) !important;
-        min-width: min(86vw, 320px) !important;
-        max-width: min(86vw, 320px) !important;
-
-        height: 100dvh;
-
-        z-index: 1000;
-
-        transform: translateX(-105%);
-        transition: transform 0.25s ease;
-
-        overflow-y: auto;
-
-        box-shadow: 10px 0 35px rgba(0, 0, 0, 0.35);
-    }
-
-    .sidebar.mobile-open {
-        transform: translateX(0);
-    }
-
-
-    /* ---------- MAIN ---------- */
-
-    .main {
-        width: 100%;
-        min-width: 0;
-        height: 100dvh;
-
-        flex: 1;
-
-        overflow: hidden;
-
-        display: flex;
-        flex-direction: column;
-    }
-
-
-    /* ---------- BRAND ---------- */
-
-    .brand {
-        padding: 18px 16px;
-    }
-
-
-    /* ---------- MODE TABS ---------- */
-
-    .mode-tabs {
-        width: 100%;
-
-        display: flex;
-
-        flex-shrink: 0;
-    }
-
-    .mode-tab {
-        flex: 1;
-
-        min-width: 0;
-
-        padding: 12px 8px;
-
-        font-size: 11px;
-    }
-
-
-    /* ---------- CHAT AREA ---------- */
-
-    .log {
-        flex: 1;
-
-        min-height: 0;
-
-        width: 100%;
-
-        overflow-y: auto;
-        overflow-x: hidden;
-
-        padding: 16px 12px 90px;
-    }
-
-
-    /* ---------- PROMPT ---------- */
-
-    .prompt-bar {
-        position: sticky;
-        bottom: 0;
-
-        width: 100%;
-
-        box-sizing: border-box;
-
-        padding: 10px;
-
-        z-index: 20;
-    }
-
-    .prompt-bar input {
-        min-width: 0;
-        flex: 1;
-
-        font-size: 13px;
-    }
-
-    .btn-run {
-        flex-shrink: 0;
-    }
-
-
-    /* ---------- SQL WORKSPACE ---------- */
-
-    .sql-workspace {
-        width: 100%;
-        min-width: 0;
-
-        height: 100%;
-
-        overflow-y: auto;
-    }
-
-    .workspace-header {
-        padding: 12px;
-    }
-
-    .workspace-editor-wrap {
-        padding: 8px 10px;
-    }
-
-    .sql-editor {
-        width: 100%;
-
-        min-height: 240px;
-
-        font-size: 12px;
-    }
-
-    .workspace-toolbar {
-        display: flex;
-        flex-wrap: wrap;
-
-        gap: 7px;
-
-        padding: 8px 10px;
-    }
-
-    .workspace-hint {
-        width: 100%;
-        order: 5;
-    }
-
-
-    /* ---------- TABLE PREVIEW ---------- */
-
-    .table-preview-panel {
-        position: fixed;
-
-        inset: 0;
-
-        width: 100% !important;
-        max-width: none !important;
-
-        height: 100dvh;
-
-        z-index: 900;
-
-        overflow: hidden;
-    }
-
-    .table-preview-panel .preview-content {
-        overflow-x: auto;
-    }
-
-
-    /* ---------- DATABASE / SCHEMA ---------- */
-
-    .databases-panel,
-    .schema-panel,
-    .history-panel {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .database-item,
-    .schema-table,
-    .history-item {
-        max-width: 100%;
-    }
-
-
-    /* ---------- TABLE ACTIONS ---------- */
-
-    #sidebarTableActions {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    #sidebarExportCsv,
-    #sidebarExportXlsx {
-        flex: 1;
-        min-height: 36px;
-    }
-
-
-    /* ---------- MODALS ---------- */
-
-    .modal-overlay {
-        padding: 12px;
-    }
-
-    .modal {
-        width: 100%;
-        max-width: none;
-
-        max-height: 90dvh;
-
-        overflow-y: auto;
-    }
-
-    .modal-wide {
-        width: 100%;
-    }
-
-
-    /* ---------- HISTORY ---------- */
-
-    .history-search-input {
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    .history-filters {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-
-        padding-bottom: 5px;
-    }
-
-    .history-filter-chip {
-        flex-shrink: 0;
-    }
-
-
-    /* ---------- EMPTY STATE ---------- */
-
-    .empty-state {
-        padding: 30px 15px;
-    }
-
-    .empty-state p {
-        font-size: 13px;
-    }
-
-
-    /* ---------- DATABASE ACTIONS ---------- */
-
-    .database-actions {
-        padding: 10px;
-    }
-
-    .btn-create-table {
-        width: 100%;
-    }
+  html,
+  body {
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .app,
+  .app.preview-open {
+    width: 100%;
+    min-width: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(86vw, 320px) !important;
+    min-width: min(86vw, 320px) !important;
+    max-width: min(86vw, 320px) !important;
+    height: 100dvh;
+    z-index: 1000;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    box-shadow: 10px 0 35px rgba(0, 0, 0, 0.35);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .main {
+    width: 100%;
+    min-width: 0;
+    height: 100dvh;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .brand { padding: 18px 16px; }
+
+  .mode-tabs {
+    width: 100%;
+    display: flex;
+    flex-shrink: 0;
+  }
+
+  .mode-tab {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 8px;
+    font-size: 11px;
+  }
+
+  .log {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px 12px 90px;
+  }
+
+  .prompt-bar {
+    position: sticky;
+    bottom: 0;
+    width: 100%;
+    padding: 10px;
+    z-index: 20;
+  }
+
+  .prompt-bar input {
+    min-width: 0;
+    flex: 1;
+    font-size: 13px;
+  }
+
+  .btn-run { flex-shrink: 0; }
+
+  .sql-workspace {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .workspace-header { padding: 12px; }
+
+  .workspace-editor-wrap { padding: 8px 10px; }
+
+  .sql-editor {
+    width: 100%;
+    min-height: 240px;
+    font-size: 12px;
+  }
+
+  .workspace-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    padding: 8px 10px;
+  }
+
+  .workspace-hint {
+    width: 100%;
+    order: 5;
+  }
+
+  .table-preview-panel {
+    position: fixed;
+    inset: 0;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100dvh;
+    z-index: 900;
+    overflow: hidden;
+  }
+
+  .table-preview-panel .preview-content {
+    overflow-x: auto;
+  }
+
+  .databases-panel,
+  .schema-panel,
+  .history-panel {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  #sidebarTableActions {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  #sidebarExportCsv,
+  #sidebarExportXlsx {
+    flex: 1;
+    min-height: 36px;
+  }
+
+  .modal-overlay { padding: 12px; }
+
+  .modal {
+    width: 100%;
+    max-width: none;
+    max-height: 90dvh;
+    overflow-y: auto;
+  }
+
+  .modal-wide { width: 100%; }
+
+  .history-search-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .history-filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 5px;
+  }
+
+  .history-filter-chip { flex-shrink: 0; }
+
+  .empty-state { padding: 30px 15px; }
+  .empty-state p { font-size: 13px; }
+
+  .database-actions { padding: 10px; }
+  .btn-create-table { width: 100%; }
 }
-
 
 /* ============================================================
    VERY SMALL PHONES
    ============================================================ */
 
 @media (max-width: 380px) {
+  .brand-name { font-size: 17px; }
+  .mode-tab { font-size: 10px; }
+  .prompt-bar { padding: 7px; }
+  .prompt-caret { display: none; }
 
-    .brand-name {
-        font-size: 17px;
-    }
+  .log {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
 
-    .mode-tab {
-        font-size: 10px;
-    }
+  .workspace-toolbar button { flex: 1; }
+}
+/* Remove space between sidebar and chat */
+.app {
+    gap: 0 !important;
+    column-gap: 0 !important;
+}
 
-    .prompt-bar {
-        padding: 7px;
-    }
+.main {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+    border-left: 0 !important;
+}
+/* ===== SIDEBAR / CHAT MUST TOUCH ===== */
 
-    .prompt-caret {
-        display: none;
-    }
+.app {
+    display: grid !important;
+    grid-template-columns: 280px minmax(0, 1fr) !important;
+    gap: 0 !important;
+    column-gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
 
-    .log {
-        padding-left: 9px;
-        padding-right: 9px;
-    }
+.sidebar {
+    margin: 0 !important;
+    border-right: 1px solid var(--border) !important;
+}
 
-    .workspace-toolbar button {
-        flex: 1;
-    }
+.main {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
 }
