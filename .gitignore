@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+server.log
+uploads/*.sqlite
+backups/*.bak
+data/*.sqlite
+data/memory/*.sqlite
+data/vectorstore/

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>eng2sql — database console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">▚</span>
+      <span class="brand-name">eng2sql</span>
+    </div>
+
+    <div class="upload-zone" id="uploadZone">
+      <input
+        type="file"
+        id="fileInput"
+        accept=".db,.sqlite,.sqlite3,.csv,.xlsx"
+        hidden
+      />
+      <button class="btn-new-db" id="newDbBtn">
+        <span class="btn-icon">＋</span> New Database
+      </button>
+      <button class="btn-upload" id="uploadBtn">
+        <span class="btn-icon">↑</span> Open Database
+      </button>
+      <p class="upload-hint">.db · .sqlite · .sqlite3 · .csv · .xlsx</p>
+      <p class="upload-status" id="uploadStatus"></p>
+    </div>
+
+    <!-- ============ DATABASES (multi-db workspace) ============ -->
+    <div class="databases-panel" id="databasesPanel">
+      <div class="schema-heading">
+        <span>databases</span>
+        <span class="schema-count" id="databaseCount"></span>
+      </div>
+      <div id="databaseList"></div>
+    </div>
+
+    <div class="schema-panel" id="schemaPanel" hidden>
+      <div class="schema-heading">
+        <span>schema</span>
+        <span class="schema-count" id="tableCount"></span>
+      </div>
+
+      <div class="schema-tree" id="schemaTree"></div>
+    </div>
+
+    <div class="database-actions">
+      <button class="btn-create-table" id="createTableBtn" disabled>
+        ＋ Create Table
+      </button>
+    </div>
+
+    <!-- ============ HISTORY (Advanced Query History) ============ -->
+    <div class="history-panel" id="historyPanel">
+      <div class="schema-heading">
+        <span>history</span>
+        <span class="schema-count" id="historyTotalCount"></span>
+      </div>
+
+      <div class="history-search-row">
+        <input
+          type="text"
+          id="historySearch"
+          class="history-search-input"
+          placeholder="Search history…"
+          autocomplete="off"
+          disabled
+        />
+      </div>
+
+      <div class="history-filters" id="historyFilters">
+        <button class="history-filter-chip active" data-status="all" type="button">All</button>
+        <button class="history-filter-chip" data-status="executed" type="button">Executed</button>
+        <button class="history-filter-chip" data-status="rejected" type="button">Rejected</button>
+        <button class="history-filter-chip" data-status="cancelled" type="button">Cancelled</button>
+        <button class="history-filter-chip" data-status="error" type="button">Error</button>
+      </div>
+
+      <div class="history-list" id="historyList">
+        <p class="history-empty">No database selected.</p>
+      </div>
+
+      <div class="history-pagination" id="historyPagination"></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connLabel">no database loaded</span>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+
+    <!-- ============ MODE TABS: AI Chat / SQL Workspace ============ -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabChat" type="button">
+        <span class="mode-tab-icon">✦</span> AI Chat
+      </button>
+      <button class="mode-tab" id="tabWorkspace" type="button">
+        <span class="mode-tab-icon">⌗</span> SQL Workspace
+      </button>
+    </div>
+
+    <div class="log" id="log">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-glyph">⌁</div>
+        <p>Open a SQLite database, then describe what you want in plain English.</p>
+        <p class="empty-sub">Reads run immediately. Anything that changes data is previewed first — nothing writes without your confirmation.</p>
+      </div>
+    </div>
+
+    <div class="prompt-bar">
+      <span class="prompt-caret">sql&gt;</span>
+      <input
+        type="text"
+        id="question"
+        placeholder="describe what you want…"
+        autocomplete="off"
+        disabled
+      />
+      <button class="btn-run" id="askBtn" disabled>Run</button>
+    </div>
+
+    <!-- ============ SQL WORKSPACE (center area, hidden by default) ============ -->
+    <section class="sql-workspace" id="sqlWorkspace" hidden>
+      <div class="workspace-header">
+        <span class="workspace-title">SQL WORKSPACE</span>
+        <span class="workspace-dbtag" id="workspaceDbTag">no database selected</span>
+      </div>
+
+      <div class="workspace-editor-wrap">
+        <textarea
+          id="sqlEditor"
+          class="sql-editor"
+          spellcheck="false"
+          placeholder="SELECT * FROM users WHERE city = 'Ghaziabad';"
+          disabled
+        ></textarea>
+      </div>
+
+      <div class="workspace-toolbar">
+        <button class="btn-run-sql" id="runSqlBtn" disabled>▶ Run SQL</button>
+        <button class="btn-clear-sql" id="clearSqlBtn" disabled>Clear</button>
+        <span class="workspace-hint">Ctrl+Enter to run</span>
+        <span class="workspace-status" id="workspaceStatus">Status: Ready</span>
+      </div>
+
+      <div class="workspace-results" id="workspaceResults"></div>
+    </section>
+
+  </main>
+
+  <!-- ============ TABLE PREVIEW (right panel) ============ -->
+  <aside id="tablePreviewPanel" class="table-preview-panel" hidden></aside>
+
+</div>
+
+<!-- CREATE TABLE MODAL -->
+<div class="modal-overlay" id="createTableModal" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Create Table</h2>
+      <button
+        class="modal-close"
+        id="closeCreateTable"
+        type="button">
+        ×
+      </button>
+    </div>
+    <div class="modal-body">
+      <label for="tableNameInput">Table name</label>
+      <input
+        type="text"
+        id="tableNameInput"
+        placeholder="e.g. employees"
+        autocomplete="off"
+      />
+      <div class="columns-header">
+        <span>Columns</span>
+      </div>
+      <div id="columnList">
+        <div class="column-row">
+          <input
+            class="column-name"
+            type="text"
+            placeholder="Column name"
+          />
+          <select class="column-type">
+            <option value="TEXT">TEXT</option>
+            <option value="INTEGER">INTEGER</option>
+            <option value="REAL">REAL</option>
+            <option value="NUMERIC">NUMERIC</option>
+            <option value="BLOB">BLOB</option>
+          </select>
+          <button
+            class="remove-column"
+            type="button">
+            ×
+          </button>
+        </div>
+      </div>
+      <button
+        class="btn-add-column"
+        id="addColumnBtn"
+        type="button">
+        ＋ Add Column
+      </button>
+    </div>
+    <div class="modal-footer">
+      <button
+        class="btn-cancel"
+        id="cancelCreateTable"
+        type="button">
+        Cancel
+      </button>
+      <button
+        class="btn-create"
+        id="submitCreateTable"
+        type="button">
+        Create Table
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY DETAIL MODAL -->
+<div class="modal-overlay" id="historyDetailModal" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h2>Query Details</h2>
+      <button
+        class="modal-close"
+        id="closeHistoryDetail"
+        type="button">
+        ×
+      </button>
+    </div>
+    <div class="modal-body" id="historyDetailBody">
+      <!-- populated by script.js -->
+    </div>
+    <div class="modal-footer history-detail-footer">
+      <button class="btn-cancel" id="historyDetailClose" type="button">Close</button>
+      <button class="btn-secondary" id="historyDetailOpenSql" type="button">⌗ Open in SQL Workspace</button>
+      <button class="btn-create" id="historyDetailReuse" type="button">↺ Reuse Question</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="/script.js?v=11"></script>
+</body>
+</html>

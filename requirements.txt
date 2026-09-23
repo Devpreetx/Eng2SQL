@@ -1,0 +1,16 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+mistralai>=1.5,<2.0
+python-dotenv>=1.0,<2.0
+sqlglot==25.24.4
+python-multipart==0.0.9
+pydantic==2.9.2
+pandas>=2.2,<3.0
+openpyxl>=3.1,<4.0
+langgraph>=0.6,<1.0
+langchain-core>=0.3,<1.0
+langchain-mistralai>=0.2,<1.0
+langchain-chroma>=0.2,<1.0
+langchain-huggingface>=0.1,<1.0
+sentence-transformers>=3.0,<6.0
+chromadb>=0.6,<2.0

@@ -1,0 +1,2579 @@
+/* ============================================================
+   eng2sql — design tokens
+   A database console: quiet, technical, legible. The schema
+   sidebar reads like a directory tree; the prompt bar reads
+   like a real query prompt. Colour marks intent, not decoration:
+   teal = read, amber = pending write, red = destructive/error.
+   ============================================================ */
+.hidden {
+    display: none !important;
+}
+
+.modal-overlay[hidden] {
+    display: none !important;
+}
+
+:root {
+  --bg:        #0E1116;
+  --panel:     #151922;
+  --panel-2:   #1A1F2A;
+  --border:    #262C38;
+  --border-lt: #323A4A;
+
+  --text:      #E7EAF2;
+  --text-dim:  #9AA3B5;
+  --text-faint:#5C6478;
+
+  --teal:      #3ECF8E;
+  --teal-dim:  #1F4F41;
+  --amber:     #F2B84B;
+  --amber-dim: #4A3B1B;
+  --red:       #F0596B;
+  --red-dim:   #4A2028;
+
+  --violet:    #9B8CFF;
+  --violet-dim:#2C2650;
+
+  --radius:    9px;
+  --font-ui:   'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+
+  --shadow-soft: 0 10px 30px -12px rgba(0,0,0,0.55);
+  --shadow-glow-teal: 0 0 0 1px rgba(62,207,142,0.18), 0 8px 24px -10px rgba(62,207,142,0.25);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background:
+    radial-gradient(1100px 480px at 14% -8%, rgba(62,207,142,0.05), transparent 60%),
+    radial-gradient(900px 460px at 100% 0%, rgba(155,140,255,0.045), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ============ layout ============ */
+
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+  transition: grid-template-columns 0.15s ease;
+}
+
+.app.preview-open {
+  grid-template-columns: 280px 1fr 380px;
+}
+
+.sidebar {
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+}
+
+/* ============ brand ============ */
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  color: var(--teal);
+  font-size: 20px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(62,207,142,0.5);
+}
+
+.brand-name {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  background: linear-gradient(90deg, var(--text) 0%, var(--teal) 140%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============ upload zone ============ */
+
+.upload-zone {
+  padding: 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.btn-upload {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+}
+
+.btn-upload:hover {
+  border-color: var(--teal);
+  background: #1B2129;
+}
+
+.btn-upload:active { transform: scale(0.98); }
+
+.btn-upload:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.btn-icon { color: var(--teal); font-size: 14px; }
+
+.upload-hint {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+}
+
+.upload-status {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  min-height: 1em;
+}
+
+.upload-status.error { color: var(--red); }
+.upload-status.ok { color: var(--teal); }
+
+/* ============ schema tree ============ */
+
+.schema-panel {
+  flex-shrink: 0;
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schema-heading {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+
+.schema-table {
+  margin-bottom: 4px;
+}
+
+.schema-table-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text);
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: default;
+  transition: background 0.12s ease;
+}
+
+.schema-table-name:hover { background: var(--panel-2); }
+
+.schema-table-name::before {
+  content: "▤";
+  color: var(--teal);
+  font-size: 11px;
+}
+
+.schema-columns {
+  padding-left: 21px;
+  border-left: 1px solid var(--border);
+  margin-left: 8px;
+}
+
+.schema-col {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 2px 0;
+  display: flex;
+  gap: 6px;
+}
+
+.schema-col .col-type {
+  color: var(--text-faint);
+}
+
+.schema-col.pk .col-name { color: var(--amber); }
+.schema-col.pk::before { content: "key "; color: var(--text-faint); font-size: 10px; }
+
+/* ============ sidebar footer ============ */
+
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.conn-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.conn-dot.live {
+  background: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-dim);
+}
+
+/* ============ mode tabs (AI Chat / SQL Workspace) ============ */
+
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 14px 32px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  flex-shrink: 0;
+}
+
+.mode-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.mode-tab-icon {
+  font-size: 13px;
+  color: currentColor;
+}
+
+.mode-tab:hover { color: var(--text-dim); }
+
+.mode-tab.active {
+  color: var(--teal);
+  border-bottom-color: var(--teal);
+}
+
+.mode-tab:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+  border-radius: 4px 4px 0 0;
+}
+
+/* ============ log / conversation ============ */
+
+.log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.empty-state {
+  margin: auto;
+  max-width: 420px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.empty-glyph {
+  font-size: 26px;
+  color: var(--teal);
+  margin-bottom: 14px;
+}
+
+.empty-state p { font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+.empty-state .empty-sub { font-size: 12.5px; color: var(--text-faint); }
+
+.entry {
+  animation: rise 0.22s ease;
+  max-width: 760px;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.entry-question {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+.entry-question::before {
+  content: "sql>";
+  color: var(--teal);
+}
+
+.entry-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-lt);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-soft);
+}
+
+.entry-card.read   { border-left-color: var(--teal); }
+.entry-card.write  { border-left-color: var(--amber); }
+.entry-card.error  { border-left-color: var(--red); }
+.entry-card.info   { border-left-color: var(--text-faint); }
+
+.entry-tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.entry-tag.read  { background: var(--teal-dim); color: var(--teal); }
+.entry-tag.write { background: var(--amber-dim); color: var(--amber); }
+.entry-tag.error { background: var(--red-dim); color: var(--red); }
+
+.sql-block {
+  background: #0A0D12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: #C9E8D8;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 10px;
+}
+
+.entry-explanation {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+  margin: 0 0 10px;
+}
+
+.impact-line {
+  font-size: 13px;
+  color: var(--amber);
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+.impact-line.unknown { color: var(--text-faint); font-weight: 400; }
+
+.sample-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin: 4px 0 6px;
+}
+
+/* ============ open-in-workspace handoff chip ============ */
+
+.open-in-workspace-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--violet-dim);
+  border: 1px solid var(--violet);
+  color: var(--violet);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin: 2px 0 12px;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.open-in-workspace-btn:hover { filter: brightness(1.15); }
+.open-in-workspace-btn:active { transform: scale(0.98); }
+
+.open-in-workspace-btn:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+
+/* ============ results table ============ */
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 6px;
+}
+
+table.result-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.result-table th {
+  text-align: left;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-weight: 500;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+}
+
+.result-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.result-table tr:last-child td { border-bottom: none; }
+.result-table tr:hover td { background: #171B24; }
+
+.no-rows {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* ============ confirm actions ============ */
+
+.confirm-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.btn {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.btn:active { transform: scale(0.98); }
+.btn:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.btn-confirm {
+  background: var(--red);
+  color: #1a0508;
+}
+.btn-confirm:hover { filter: brightness(1.08); }
+
+.btn-cancel {
+  background: transparent;
+  border-color: var(--border-lt);
+  color: var(--text-dim);
+}
+.btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
+
+.resolution {
+  font-size: 13px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+}
+
+.resolution.ok  { color: var(--teal); }
+.resolution.err { color: var(--red); }
+
+/* ============ prompt bar ============ */
+
+.prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 32px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.prompt-caret {
+  font-family: var(--font-mono);
+  color: var(--teal);
+  font-size: 13.5px;
+  flex-shrink: 0;
+}
+
+#question {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  padding: 6px 0;
+}
+
+#question::placeholder { color: var(--text-faint); }
+#question:disabled { color: var(--text-faint); }
+
+.btn-run {
+  background: var(--teal);
+  color: #06231A;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+  box-shadow: var(--shadow-glow-teal);
+}
+
+.btn-run:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-run:active:not(:disabled) { transform: scale(0.98); }
+.btn-run:disabled { background: var(--panel-2); color: var(--text-faint); cursor: not-allowed; box-shadow: none; }
+.btn-run:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* ============ scrollbars ============ */
+
+.log::-webkit-scrollbar, .schema-panel::-webkit-scrollbar, .sidebar::-webkit-scrollbar,
+.history-list::-webkit-scrollbar { width: 8px; }
+.log::-webkit-scrollbar-thumb, .schema-panel::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb,
+.history-list::-webkit-scrollbar-thumb {
+  background: var(--border-lt);
+  border-radius: 4px;
+}
+.log::-webkit-scrollbar-track, .schema-panel::-webkit-scrollbar-track, .sidebar::-webkit-scrollbar-track,
+.history-list::-webkit-scrollbar-track { background: transparent; }
+
+/* ============ responsive ============ */
+
+@media (max-width: 720px) {
+  .app, .app.preview-open { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
+  .log { padding: 20px; }
+  .prompt-bar { padding: 12px 20px; }
+  .mode-tabs { padding: 12px 20px 0; }
+  .sql-workspace { padding: 16px 20px; }
+  .table-preview-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    border-left: none;
+    height: 100vh;
+  }
+}
+
+/* ---------------- TABLE PREVIEW (right-side panel) ---------------- */
+
+.table-preview-panel {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    height: 100vh;
+    overflow: hidden;
+    animation: slide-in 0.18s ease;
+}
+
+.table-preview-panel[hidden] {
+    display: none;
+}
+
+@keyframes slide-in {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: translateX(0); }
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.preview-header .preview-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.preview-header strong {
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#previewCount {
+    color: var(--text-faint);
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+}
+
+.preview-close {
+    border: none;
+    background: transparent;
+    color: var(--text-faint);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 6px;
+    flex-shrink: 0;
+}
+
+.preview-close:hover {
+    color: var(--text);
+    background: var(--panel-2);
+}
+
+.preview-close:focus-visible {
+    outline: 2px solid var(--teal);
+    outline-offset: 2px;
+}
+
+#previewContent {
+    flex: 1;
+    overflow: auto;
+    padding: 0;
+}
+
+#previewContent .table-wrap {
+    border: none;
+    border-radius: 0;
+    margin-top: 0;
+}
+
+.preview-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.preview-page-btn {
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.preview-page-btn:hover:not(:disabled) {
+    background: var(--border);
+}
+
+.preview-page-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.preview-open-workspace {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 12px;
+    background: var(--violet-dim);
+    border: 1px solid var(--violet);
+    color: var(--violet);
+    font-family: var(--font-ui);
+    font-size: 12.5px;
+    font-weight: 500;
+    padding: 8px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+.preview-open-workspace:hover { filter: brightness(1.15); }
+
+.table-preview-panel::-webkit-scrollbar,
+#previewContent::-webkit-scrollbar { width: 8px; }
+.table-preview-panel::-webkit-scrollbar-thumb,
+#previewContent::-webkit-scrollbar-thumb {
+  background: var(--border-lt);
+  border-radius: 4px;
+}
+.table-preview-panel::-webkit-scrollbar-track,
+#previewContent::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------- DATABASES SIDEBAR (multi-db workspace) ---------------- */
+
+.databases-panel {
+  padding: 16px 18px 4px;
+  border-bottom: 1px solid var(--border);
+  max-height: 26vh;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.databases-panel .schema-heading {
+  margin-bottom: 8px;
+}
+
+#databaseList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.db-list-empty {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 6px 6px 10px;
+  line-height: 1.5;
+}
+
+.db-item {
+  border-radius: 7px;
+  margin-bottom: 2px;
+}
+
+.db-item-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.db-item-name::before {
+  content: "📁";
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.db-item-name:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.db-item-name:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+
+.db-item.active .db-item-name {
+  background: var(--teal-dim);
+  border-color: var(--teal);
+  color: var(--teal);
+  font-weight: 500;
+}
+
+.db-item-tables {
+  padding-left: 23px;
+  margin: 2px 0 6px;
+  border-left: 1px solid var(--border);
+  margin-left: 11px;
+}
+
+.db-item-table {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.db-item.active .db-item-table {
+  color: var(--text-dim);
+}
+
+/* New Database / Open Database sit side-by-side above the upload hint */
+
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-new-db {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--teal-dim);
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.btn-new-db:hover { filter: brightness(1.15); }
+.btn-new-db:active { transform: scale(0.98); }
+
+.btn-new-db:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.btn-new-db:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------------- database-actions / create table trigger ---------------- */
+
+.database-actions {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.btn-create-table {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.btn-create-table:hover:not(:disabled) { border-color: var(--teal); }
+
+.btn-create-table:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+/* ---------------- CREATE TABLE MODAL ---------------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 8, 12, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border-lt);
+  border-radius: 12px;
+  width: 420px;
+  max-width: 92vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.modal.modal-wide {
+  width: 620px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close:hover { color: var(--text); }
+
+.modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+}
+
+.modal-body label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.modal-body input[type="text"] {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  outline: none;
+  margin-bottom: 14px;
+}
+
+.modal-body input[type="text"]:focus { border-color: var(--teal); }
+
+.columns-header {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.column-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.column-row .column-name {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.column-type {
+  background: var(--panel-2);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border-radius: 6px;
+  padding: 8px 6px;
+}
+
+.remove-column {
+  background: none;
+  border: 1px solid var(--border-lt);
+  color: var(--text-faint);
+  border-radius: 6px;
+  width: 32px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.remove-column:hover { color: var(--red); border-color: var(--red); }
+
+.btn-add-column {
+  background: none;
+  border: 1px dashed var(--border-lt);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.btn-add-column:hover { border-color: var(--teal); color: var(--teal); }
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-create {
+  background: var(--teal);
+  color: #06231A;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.btn-create:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-create:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.btn-secondary {
+  background: var(--violet-dim);
+  border: 1px solid var(--violet);
+  color: var(--violet);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.btn-secondary:hover:not(:disabled) { filter: brightness(1.15); }
+.btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------------- CHART PANEL (Phase 2 — center conversation area) ---------------- */
+
+.chart-panel {
+  margin: 4px 0 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.chart-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.chart-panel-title {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-dim);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-panel-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.chart-toggle-btn,
+.chart-download-btn {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border-lt);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.chart-toggle-btn:hover,
+.chart-download-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.chart-toggle-btn.active {
+  background: var(--teal-dim);
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.chart-canvas-wrap {
+  position: relative;
+  height: 280px;
+  width: 100%;
+}
+
+.chart-kpi-value {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 600;
+  color: var(--teal);
+  text-align: center;
+  padding: 20px 0;
+}
+
+/* ============================================================
+   SQL WORKSPACE (center area)
+   ============================================================ */
+
+.sql-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 22px 32px 24px;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.sql-workspace[hidden] { display: none; }
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.workspace-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.workspace-dbtag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.workspace-dbtag.live {
+  color: var(--teal);
+  border-color: var(--teal-dim);
+  background: var(--teal-dim);
+}
+
+.workspace-editor-wrap {
+  border: 1px solid var(--border-lt);
+  border-radius: var(--radius);
+  background: #0A0D12;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.workspace-editor-wrap:focus-within {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-glow-teal);
+}
+
+.sql-editor {
+  width: 100%;
+  min-height: 160px;
+  max-height: 340px;
+  resize: vertical;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #C9E8D8;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  tab-size: 2;
+}
+
+.sql-editor::placeholder { color: var(--text-faint); }
+.sql-editor:disabled { color: var(--text-faint); cursor: not-allowed; }
+
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.btn-run-sql {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--teal);
+  color: #06231A;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+  box-shadow: var(--shadow-glow-teal);
+}
+
+.btn-run-sql:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-run-sql:active:not(:disabled) { transform: scale(0.98); }
+.btn-run-sql:disabled { background: var(--panel-2); color: var(--text-faint); cursor: not-allowed; box-shadow: none; }
+.btn-run-sql:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+.btn-clear-sql {
+  background: transparent;
+  border: 1px solid var(--border-lt);
+  color: var(--text-dim);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-clear-sql:hover:not(:disabled) { border-color: var(--text-dim); color: var(--text); }
+.btn-clear-sql:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.workspace-hint {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.workspace-status {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+
+.workspace-status.ready   { color: var(--text-faint); }
+.workspace-status.loading { color: var(--amber); border-color: var(--amber-dim); background: var(--amber-dim); }
+.workspace-status.success { color: var(--teal); border-color: var(--teal-dim); background: var(--teal-dim); }
+.workspace-status.error   { color: var(--red); border-color: var(--red-dim); background: var(--red-dim); }
+.workspace-status.pending { color: var(--amber); border-color: var(--amber-dim); background: var(--amber-dim); }
+
+.workspace-results {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workspace-result-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-lt);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  animation: rise 0.2s ease;
+  box-shadow: var(--shadow-soft);
+}
+
+.workspace-result-card.read  { border-left-color: var(--teal); }
+.workspace-result-card.write { border-left-color: var(--amber); }
+.workspace-result-card.error { border-left-color: var(--red); }
+
+.workspace-result-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.workspace-result-meta .meta-chip {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+
+/* ============================================================
+   ADVANCED QUERY HISTORY (sidebar section + detail modal)
+   ============================================================ */
+
+.history-panel {
+  flex: 1;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 18px 12px;
+  overflow: hidden;
+}
+
+.history-panel .schema-heading { margin-bottom: 10px; flex-shrink: 0; }
+
+.history-search-row {
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.history-search-input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border-lt);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.history-search-input::placeholder { color: var(--text-faint); }
+.history-search-input:focus { border-color: var(--teal); }
+.history-search-input:disabled { color: var(--text-faint); cursor: not-allowed; }
+
+.history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.history-filter-chip {
+  background: transparent;
+  border: 1px solid var(--border-lt);
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.history-filter-chip:hover { color: var(--text-dim); border-color: var(--text-dim); }
+
+.history-filter-chip.active {
+  background: var(--teal-dim);
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 60px;
+}
+
+.history-empty {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  padding: 10px 4px;
+  line-height: 1.5;
+}
+
+.history-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 10px 4px 4px;
+}
+
+.history-group-label:first-child { padding-top: 2px; }
+
+.history-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.history-item:hover { background: var(--panel-2); }
+
+.history-item:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: -1px;
+}
+
+.history-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.history-status-dot.executed { background: var(--teal); }
+.history-status-dot.rejected,
+.history-status-dot.error    { background: var(--red); }
+.history-status-dot.cancelled{ background: var(--text-faint); }
+.history-status-dot.confirmation_required { background: var(--amber); }
+
+.history-item-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.history-item-question {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.history-item-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.history-page-btn {
+  border: 1px solid var(--border-lt);
+  background: transparent;
+  color: var(--text-dim);
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 11px;
+}
+
+.history-page-btn:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+.history-page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ---------------- history detail modal ---------------- */
+
+.history-detail-row {
+  display: flex;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.history-detail-row:last-of-type { border-bottom: none; }
+
+.history-detail-label {
+  flex-shrink: 0;
+  width: 110px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding-top: 2px;
+}
+
+.history-detail-value {
+  color: var(--text);
+  line-height: 1.55;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.history-detail-value .status-pill {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 9px;
+  border-radius: 20px;
+}
+
+.status-pill.executed { background: var(--teal-dim); color: var(--teal); }
+.status-pill.rejected, .status-pill.error { background: var(--red-dim); color: var(--red); }
+.status-pill.cancelled { background: var(--panel-2); color: var(--text-faint); }
+.status-pill.confirmation_required { background: var(--amber-dim); color: var(--amber); }
+
+.history-detail-footer {
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   HISTORY LAYOUT FIX
+   Keeps the sidebar inside the viewport and gives History
+   the remaining space so all history items can scroll.
+   ============================================================ */
+
+/* The sidebar itself should not become the scrolling container.
+   Individual sections handle their own scrolling. */
+.sidebar {
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Keep the database/schema sections compact so History gets
+   enough vertical space. */
+.databases-panel {
+  max-height: 20vh;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.schema-panel {
+  max-height: 22vh;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* History takes all remaining sidebar height. */
+.history-panel {
+  flex: 1 1 auto;
+  min-height: 180px;
+  max-height: none;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header/search/filter controls never shrink away. */
+.history-panel .schema-heading,
+.history-search-row,
+.history-filters {
+  flex-shrink: 0;
+}
+
+/* The actual history records are the only part that scrolls. */
+.history-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+/* Make each history entry clearly visible and use the full width. */
+.history-item {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.history-item + .history-item {
+  margin-top: 2px;
+}
+
+/* Keep pagination visible at the bottom. */
+.history-pagination {
+  flex-shrink: 0;
+  min-height: 30px;
+}
+
+/* Slightly tighter history controls so more records fit. */
+.history-search-row {
+  margin-bottom: 6px;
+}
+
+.history-filters {
+  margin-bottom: 7px;
+  gap: 4px;
+}
+
+.history-filter-chip {
+  padding: 3px 8px;
+}
+
+/* Better history scrollbar. */
+.history-list::-webkit-scrollbar {
+  width: 5px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: var(--border-lt);
+  border-radius: 10px;
+}
+
+.history-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-lt) transparent;
+}
+
+/* Footer stays pinned at the bottom. */
+.sidebar-footer {
+  flex-shrink: 0;
+}
+
+/* On shorter screens, give History priority over the
+   database/schema preview sections. */
+@media (max-height: 800px) and (min-width: 721px) {
+  .databases-panel {
+    max-height: 16vh;
+  }
+
+  .schema-panel {
+    max-height: 18vh;
+  }
+
+  .history-panel {
+    min-height: 190px;
+  }
+}
+
+/* Mobile sidebar: let the whole sidebar scroll because the
+   mobile layout intentionally stacks the sections. */
+@media (max-width: 720px) {
+  .sidebar {
+    height: auto;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .databases-panel {
+    max-height: 24vh;
+  }
+
+  .schema-panel {
+    max-height: 24vh;
+  }
+
+  .history-panel {
+    flex: 0 0 220px;
+    min-height: 220px;
+  }
+
+  .history-list {
+    min-height: 0;
+  }
+}
+/* ============================================================
+   ENG2SQL — FULL SIDEBAR NAVIGATION
+   ============================================================ */
+
+/* The entire left sidebar becomes one scrollable navigation area */
+.sidebar {
+  height: 100vh;
+  min-height: 0;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-lt) transparent;
+
+  border-right: 1px solid var(--border);
+}
+
+/* Chrome / Edge scrollbar */
+.sidebar::-webkit-scrollbar {
+  width: 7px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--border-lt);
+  border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+
+/* ============================================================
+   TOP BRAND
+   ============================================================ */
+
+.brand {
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   UPLOAD / DATABASE ACTION AREA
+   ============================================================ */
+
+.upload-zone {
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   DATABASES
+   Remove internal scrolling.
+   Sidebar itself handles all scrolling.
+   ============================================================ */
+
+.databases-panel {
+  max-height: none !important;
+  height: auto !important;
+
+  flex-shrink: 0;
+
+  overflow: visible !important;
+
+  padding: 16px 18px 8px;
+}
+
+
+/* Database list should grow naturally */
+#databaseList {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+
+/* ============================================================
+   SCHEMA
+   Remove the old 30vh restriction.
+   ============================================================ */
+
+.schema-panel {
+  max-height: none !important;
+  height: auto !important;
+
+  flex-shrink: 0;
+
+  overflow: visible !important;
+
+  padding: 16px 18px;
+}
+
+
+/* Schema tree */
+.schema-tree {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+
+/* ============================================================
+   CREATE TABLE BUTTON
+   ============================================================ */
+
+.database-actions {
+  flex-shrink: 0;
+
+  padding: 10px 10px 12px;
+
+  border-bottom: 1px solid var(--border);
+}
+
+
+/* ============================================================
+   HISTORY
+   This gets a proper usable area.
+   ============================================================ */
+
+.history-panel {
+  flex: 0 0 auto;
+
+  min-height: 300px;
+
+  height: auto;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: visible !important;
+
+  padding: 16px 10px 12px;
+}
+
+
+/* History heading */
+.history-panel .schema-heading {
+  flex-shrink: 0;
+}
+
+
+/* Search */
+.history-search-row {
+  flex-shrink: 0;
+}
+
+
+/* Filters */
+.history-filters {
+  flex-shrink: 0;
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+
+/* ============================================================
+   HISTORY LIST
+   No independent tiny scrollbar.
+   Let the whole sidebar scroll.
+   ============================================================ */
+
+.history-list {
+  flex: none;
+
+  height: auto;
+  min-height: 100px;
+  max-height: none !important;
+
+  overflow: visible !important;
+}
+
+
+/* History item */
+.history-item {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* ============================================================
+   HISTORY PAGINATION
+   ============================================================ */
+
+.history-pagination {
+  flex-shrink: 0;
+
+  min-height: 30px;
+
+  margin-top: 8px;
+}
+
+
+/* ============================================================
+   CONNECTION FOOTER
+   Stays at bottom of sidebar content.
+   ============================================================ */
+
+.sidebar-footer {
+  flex-shrink: 0;
+
+  position: sticky;
+  bottom: 0;
+
+  background: var(--panel);
+
+  z-index: 5;
+}
+
+
+/* ============================================================
+   BETTER SECTION SEPARATION
+   ============================================================ */
+
+.databases-panel,
+.schema-panel,
+.database-actions,
+.history-panel {
+  box-sizing: border-box;
+}
+
+
+/* ============================================================
+   DESKTOP SIDEBAR WIDTH
+   ============================================================ */
+
+@media (min-width: 721px) {
+  .sidebar {
+    min-width: 220px;
+    width: 220px;
+  }
+}
+
+
+/* ============================================================
+   MOBILE
+   ============================================================ */
+
+@media (max-width: 720px) {
+  .sidebar {
+    height: auto;
+    max-height: 55vh;
+
+    overflow-y: auto;
+
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .databases-panel,
+  .schema-panel,
+  .history-panel {
+    max-height: none !important;
+  }
+
+  .history-panel {
+    min-height: 260px;
+  }
+
+  .sidebar-footer {
+    position: sticky;
+    bottom: 0;
+  }
+}
+/* ============================================================
+   WIDER SIDEBAR
+   ============================================================ */
+
+.sidebar {
+    width: 280px !important;
+    min-width: 280px !important;
+    max-width: 280px !important;
+}
+
+/* Keep the main content positioned after the wider sidebar */
+.main {
+    min-width: 0;
+}
+
+/* Prevent long database/table names from breaking the layout */
+.database-item,
+.schema-tree,
+.history-item {
+    min-width: 0;
+}
+
+.database-item,
+.schema-tree .table-node,
+.history-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Better space for database names */
+.database-item-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* ============================================================
+   WIDER SIDEBAR
+   ============================================================ */
+
+.sidebar {
+    width: 260px !important;
+    min-width: 260px !important;
+    max-width: 260px !important;
+}
+
+/* Keep the main content positioned after the wider sidebar */
+.main {
+    min-width: 0;
+}
+
+/* Prevent long database/table names from breaking the layout */
+.database-item,
+.schema-tree,
+.history-item {
+    min-width: 0;
+}
+
+.database-item,
+.schema-tree .table-node,
+.history-item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Better space for database names */
+.database-item-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* ============================================================
+   EXPORT BUTTONS — FORCE DARK ENG2SQL STYLE
+   ============================================================ */
+
+button.export-btn,
+button.export-csv,
+button.export-xlsx {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    height: 30px !important;
+    padding: 0 11px !important;
+
+    border-radius: 5px !important;
+    border: 1px solid !important;
+
+    font-family: "IBM Plex Mono", monospace !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+
+    cursor: pointer !important;
+
+    box-shadow: none !important;
+    outline: none !important;
+
+    transition: all 0.15s ease !important;
+}
+
+
+/* ---------------- CSV ---------------- */
+
+button.export-csv {
+    background: rgba(52, 211, 153, 0.10) !important;
+    border-color: rgba(52, 211, 153, 0.45) !important;
+    color: #34d399 !important;
+}
+
+button.export-csv:hover {
+    background: rgba(52, 211, 153, 0.18) !important;
+    border-color: #34d399 !important;
+    color: #6ee7b7 !important;
+}
+
+
+/* ---------------- XLSX ---------------- */
+
+button.export-xlsx {
+    background: rgba(96, 165, 250, 0.10) !important;
+    border-color: rgba(96, 165, 250, 0.45) !important;
+    color: #60a5fa !important;
+}
+
+button.export-xlsx:hover {
+    background: rgba(96, 165, 250, 0.18) !important;
+    border-color: #60a5fa !important;
+    color: #93c5fd !important;
+}
+
+
+/* ---------------- Download icon ---------------- */
+
+button.export-btn .export-icon,
+button.export-csv .export-icon,
+button.export-xlsx .export-icon {
+    color: inherit !important;
+    margin-right: 5px !important;
+}
+
+
+/* ---------------- Export container ---------------- */
+
+.export-actions,
+.workspace-export-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+/* ============================================================
+   TABLE EXPORT BUTTONS
+   ============================================================ */
+
+.preview-header-actions {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+
+/* Base */
+.preview-export-btn {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+
+    height: 28px !important;
+    padding: 0 10px !important;
+
+    border-radius: 5px !important;
+    border: 1px solid !important;
+
+    font-family: "IBM Plex Mono", monospace !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+
+    cursor: pointer !important;
+    box-shadow: none !important;
+    outline: none !important;
+
+    transition: all 0.15s ease !important;
+}
+
+
+/* ================= CSV — GREEN ================= */
+
+#previewExportCsv {
+    background: rgba(62, 207, 142, 0.10) !important;
+    border-color: rgba(62, 207, 142, 0.45) !important;
+    color: #3ECF8E !important;
+}
+
+#previewExportCsv:hover {
+    background: rgba(62, 207, 142, 0.18) !important;
+    border-color: #3ECF8E !important;
+    color: #6EE7B7 !important;
+}
+
+
+/* ================= XLSX — BLUE ================= */
+
+#previewExportXlsx {
+    background: rgba(96, 165, 250, 0.10) !important;
+    border-color: rgba(96, 165, 250, 0.45) !important;
+    color: #60A5FA !important;
+}
+
+#previewExportXlsx:hover {
+    background: rgba(96, 165, 250, 0.18) !important;
+    border-color: #60A5FA !important;
+    color: #93C5FD !important;
+}
+
+
+/* Disabled / exporting */
+
+#previewExportCsv:disabled,
+#previewExportXlsx:disabled {
+    opacity: 0.55 !important;
+    cursor: wait !important;
+}
+/* ============================================================
+   ENG2SQL MOBILE RESPONSIVE UI
+   ============================================================ */
+
+@media (max-width: 720px) {
+
+    /* ---------- APP ---------- */
+
+    html,
+    body {
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    .app {
+        width: 100%;
+        min-width: 0;
+        height: 100dvh;
+
+        display: flex;
+        flex-direction: column;
+
+        overflow: hidden;
+    }
+
+
+    /* ---------- SIDEBAR ---------- */
+
+    .sidebar {
+        position: fixed;
+
+        top: 0;
+        left: 0;
+
+        width: min(86vw, 320px) !important;
+        min-width: min(86vw, 320px) !important;
+        max-width: min(86vw, 320px) !important;
+
+        height: 100dvh;
+
+        z-index: 1000;
+
+        transform: translateX(-105%);
+        transition: transform 0.25s ease;
+
+        overflow-y: auto;
+
+        box-shadow: 10px 0 35px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar.mobile-open {
+        transform: translateX(0);
+    }
+
+
+    /* ---------- MAIN ---------- */
+
+    .main {
+        width: 100%;
+        min-width: 0;
+        height: 100dvh;
+
+        flex: 1;
+
+        overflow: hidden;
+
+        display: flex;
+        flex-direction: column;
+    }
+
+
+    /* ---------- BRAND ---------- */
+
+    .brand {
+        padding: 18px 16px;
+    }
+
+
+    /* ---------- MODE TABS ---------- */
+
+    .mode-tabs {
+        width: 100%;
+
+        display: flex;
+
+        flex-shrink: 0;
+    }
+
+    .mode-tab {
+        flex: 1;
+
+        min-width: 0;
+
+        padding: 12px 8px;
+
+        font-size: 11px;
+    }
+
+
+    /* ---------- CHAT AREA ---------- */
+
+    .log {
+        flex: 1;
+
+        min-height: 0;
+
+        width: 100%;
+
+        overflow-y: auto;
+        overflow-x: hidden;
+
+        padding: 16px 12px 90px;
+    }
+
+
+    /* ---------- PROMPT ---------- */
+
+    .prompt-bar {
+        position: sticky;
+        bottom: 0;
+
+        width: 100%;
+
+        box-sizing: border-box;
+
+        padding: 10px;
+
+        z-index: 20;
+    }
+
+    .prompt-bar input {
+        min-width: 0;
+        flex: 1;
+
+        font-size: 13px;
+    }
+
+    .btn-run {
+        flex-shrink: 0;
+    }
+
+
+    /* ---------- SQL WORKSPACE ---------- */
+
+    .sql-workspace {
+        width: 100%;
+        min-width: 0;
+
+        height: 100%;
+
+        overflow-y: auto;
+    }
+
+    .workspace-header {
+        padding: 12px;
+    }
+
+    .workspace-editor-wrap {
+        padding: 8px 10px;
+    }
+
+    .sql-editor {
+        width: 100%;
+
+        min-height: 240px;
+
+        font-size: 12px;
+    }
+
+    .workspace-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+
+        gap: 7px;
+
+        padding: 8px 10px;
+    }
+
+    .workspace-hint {
+        width: 100%;
+        order: 5;
+    }
+
+
+    /* ---------- TABLE PREVIEW ---------- */
+
+    .table-preview-panel {
+        position: fixed;
+
+        inset: 0;
+
+        width: 100% !important;
+        max-width: none !important;
+
+        height: 100dvh;
+
+        z-index: 900;
+
+        overflow: hidden;
+    }
+
+    .table-preview-panel .preview-content {
+        overflow-x: auto;
+    }
+
+
+    /* ---------- DATABASE / SCHEMA ---------- */
+
+    .databases-panel,
+    .schema-panel,
+    .history-panel {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .database-item,
+    .schema-table,
+    .history-item {
+        max-width: 100%;
+    }
+
+
+    /* ---------- TABLE ACTIONS ---------- */
+
+    #sidebarTableActions {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    #sidebarExportCsv,
+    #sidebarExportXlsx {
+        flex: 1;
+        min-height: 36px;
+    }
+
+
+    /* ---------- MODALS ---------- */
+
+    .modal-overlay {
+        padding: 12px;
+    }
+
+    .modal {
+        width: 100%;
+        max-width: none;
+
+        max-height: 90dvh;
+
+        overflow-y: auto;
+    }
+
+    .modal-wide {
+        width: 100%;
+    }
+
+
+    /* ---------- HISTORY ---------- */
+
+    .history-search-input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .history-filters {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+
+        padding-bottom: 5px;
+    }
+
+    .history-filter-chip {
+        flex-shrink: 0;
+    }
+
+
+    /* ---------- EMPTY STATE ---------- */
+
+    .empty-state {
+        padding: 30px 15px;
+    }
+
+    .empty-state p {
+        font-size: 13px;
+    }
+
+
+    /* ---------- DATABASE ACTIONS ---------- */
+
+    .database-actions {
+        padding: 10px;
+    }
+
+    .btn-create-table {
+        width: 100%;
+    }
+}
+
+
+/* ============================================================
+   VERY SMALL PHONES
+   ============================================================ */
+
+@media (max-width: 380px) {
+
+    .brand-name {
+        font-size: 17px;
+    }
+
+    .mode-tab {
+        font-size: 10px;
+    }
+
+    .prompt-bar {
+        padding: 7px;
+    }
+
+    .prompt-caret {
+        display: none;
+    }
+
+    .log {
+        padding-left: 9px;
+        padding-right: 9px;
+    }
+
+    .workspace-toolbar button {
+        flex: 1;
+    }
+}
