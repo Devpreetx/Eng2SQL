@@ -4,10 +4,8 @@ English -> SQL generation via Groq (LangChain).
 This module only GENERATES SQL — it never executes anything.
 Validation, previews, execution, and backups live in db_utils.py.
 
-PHASE 2:
-generate_sql() takes db_id + question, retrieves relevant schema
-via app.rag.retrieve_schema(), and sends only the retrieved schema
-context to Groq.
+generate_sql() sends the model only the schema context relevant to the
+question (retrieved via app.rag), never the whole database.
 
 Features:
 - RAG-based schema retrieval
@@ -22,48 +20,46 @@ Features:
 import json
 import logging
 import re
+import threading
 import time
 
-from dotenv import load_dotenv
-from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
 from app import rag
-
-
-# ============================================================
-# ENVIRONMENT
-# ============================================================
-
-load_dotenv()
-
-
-# ============================================================
-# LOGGER
-# ============================================================
+from app.config import GROQ_MODEL
+from app.db_utils import split_statements
 
 logger = logging.getLogger("llm")
-logger.setLevel(logging.INFO)
 
-if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(
-        logging.Formatter(
-            "[%(levelname)s] %(name)s: %(message)s"
-        )
-    )
-    logger.addHandler(_handler)
+# Give up on a single Groq call after this many seconds.
+REQUEST_TIMEOUT_S = 60
+
+_llm = None
+_llm_lock = threading.Lock()
 
 
-# ============================================================
-# GROQ LLM
-# ============================================================
+def get_llm():
+    """
+    Lazily construct the Groq client, so the server can start (and serve
+    the UI, table previews and the SQL Workspace) without a GROQ_API_KEY.
+    """
+    global _llm
 
-llm = ChatGroq(
-    model="openai/gpt-oss-120b",
-    temperature=0,
-    max_retries=2,
-)
+    with _llm_lock:
+        if _llm is None:
+            from langchain_groq import ChatGroq
+
+            _llm = ChatGroq(
+                model=GROQ_MODEL,
+                temperature=0,
+                # Retries are handled by _invoke_llm below; letting the SDK
+                # retry as well would multiply the attempts.
+                max_retries=0,
+                timeout=REQUEST_TIMEOUT_S,
+            )
+
+    return _llm
+
 
 # ============================================================
 # PROMPT
@@ -178,57 +174,32 @@ Question:
 )
 
 
-# ============================================================
-# JSON EXTRACTION
-# ============================================================
-
 def _extract_json(raw_text: str) -> str:
     """
     Removes markdown code fences and extracts the JSON object
     even if Groq adds text around it.
     """
-
     if not raw_text:
         return ""
 
     text = raw_text.strip()
+    text = re.sub(r"^```(?:json)?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"```$", "", text).strip()
 
-    # Remove markdown code fences
-    text = re.sub(
-        r"^```(?:json)?",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    text = re.sub(
-        r"```$",
-        "",
-        text,
-    )
-
-    text = text.strip()
-
-    # Extract JSON object
     start = text.find("{")
     end = text.rfind("}")
 
-    if start != -1 and end != -1 and end > start:
+    if start != -1 and end > start:
         text = text[start:end + 1]
 
     return text.strip()
 
-
-# ============================================================
-# CLARIFICATION RESULT
-# ============================================================
 
 def _clarification_result(message: str) -> dict:
     """
     Returns a safe clarification response instead of exposing
     internal errors to the frontend.
     """
-
     return {
         "statements": [],
         "intent": "other",
@@ -243,6 +214,17 @@ def _clarification_result(message: str) -> dict:
 # GROQ INVOCATION WITH RETRY
 # ============================================================
 
+_RATE_LIMIT_MARKERS = ("429", "rate limit", "rate_limit", "too many requests")
+_UNAVAILABLE_MARKERS = ("503", "service unavailable", "temporarily unavailable")
+_AUTH_MARKERS = ("401", "api key", "api_key", "authentication", "unauthorized")
+_QUOTA_MARKERS = ("quota", "insufficient", "billing")
+
+
+def _matches(error: Exception, markers: tuple) -> bool:
+    text = str(error).lower()
+    return any(marker in text for marker in markers)
+
+
 def _invoke_llm(final_prompt, max_attempts: int = 3):
     """
     Calls Groq with retry handling for temporary rate-limit
@@ -256,72 +238,101 @@ def _invoke_llm(final_prompt, max_attempts: int = 3):
 
     Other errors are raised immediately.
     """
+    llm = get_llm()
 
-    last_error = None
-
-    for attempt in range(max_attempts):
-
+    for attempt in range(1, max_attempts + 1):
         try:
-
-            logger.info(
-                f"Calling Groq "
-                f"(attempt {attempt + 1}/{max_attempts})"
-            )
-
-            response = llm.invoke(final_prompt)
-
-            logger.info(
-                "Groq response received successfully."
-            )
-
-            return response
-
+            return llm.invoke(final_prompt)
         except Exception as e:
+            retryable = _matches(e, _RATE_LIMIT_MARKERS + _UNAVAILABLE_MARKERS)
 
-            last_error = e
-            error_text = str(e).lower()
-
-            is_retryable = (
-                "429" in error_text
-                or "rate limit" in error_text
-                or "rate_limit" in error_text
-                or "too many requests" in error_text
-                or "503" in error_text
-                or "service unavailable" in error_text
-                or "temporarily unavailable" in error_text
-            )
-
-            # Don't retry unrelated errors
-            if not is_retryable:
+            if not retryable or attempt == max_attempts:
                 raise
 
+            wait_time = 2 ** attempt
             logger.warning(
-                f"Groq temporary/rate-limit error "
-                f"(attempt {attempt + 1}/{max_attempts})."
+                f"Groq temporary/rate-limit error (attempt {attempt}/{max_attempts}), "
+                f"retrying in {wait_time}s."
             )
+            time.sleep(wait_time)
 
-            if attempt < max_attempts - 1:
 
-                wait_time = 2 ** (attempt + 1)
+def invoke_text(prompt_text: str) -> str:
+    """One-shot completion for a plain-text prompt; returns the reply text."""
+    response = _invoke_llm(prompt_text)
+    return (response.content or "").strip()
 
-                logger.warning(
-                    f"Waiting {wait_time} seconds "
-                    f"before retry..."
-                )
 
-                time.sleep(wait_time)
+def _friendly_api_error(error: Exception) -> str | None:
+    """A user-facing message for known Groq failure modes, else None."""
+    if _matches(error, _RATE_LIMIT_MARKERS):
+        return (
+            "The Groq AI service is temporarily rate-limited. "
+            "Please wait a little and try again."
+        )
 
-    raise last_error
+    if _matches(error, _AUTH_MARKERS):
+        return (
+            "The Groq API key is missing, invalid or expired. "
+            "Please check your GROQ_API_KEY."
+        )
+
+    if _matches(error, _QUOTA_MARKERS):
+        return (
+            "The Groq API usage limit has been reached. "
+            "Please check your Groq API usage and limits."
+        )
+
+    return None
 
 
 # ============================================================
 # MAIN SQL GENERATION
 # ============================================================
 
+def _schema_context(
+    db_id: str,
+    question: str,
+    schema: dict | None,
+    retrieved: dict | None,
+) -> str | None:
+    """
+    The schema text to ground the model with: the retrieved table
+    documents, or the full schema when retrieval produced nothing.
+    Returns None when there is no schema information at all.
+    """
+    if retrieved is None:
+        try:
+            retrieved = rag.retrieve_schema(db_id, question, schema=schema)
+        except Exception as e:
+            logger.error(f"RAG retrieval failed for db_id={db_id}: {e}")
+            retrieved = {}
+
+    contents = [
+        doc["content"]
+        for doc in retrieved.get("documents", [])
+        if isinstance(doc, dict) and doc.get("content")
+    ]
+
+    if contents:
+        return "\n\n---\n\n".join(contents)
+
+    if schema:
+        logger.info(f"Database ID: {db_id} — RAG empty, falling back to full schema.")
+        return json.dumps(schema, indent=2, default=str)
+
+    if schema is not None:
+        # A brand-new database: nothing to read yet, but CREATE TABLE is valid.
+        return "(This database has no tables yet.)"
+
+    return None
+
+
 def generate_sql(
     db_id: str,
     question: str,
     schema: dict | None = None,
+    retrieved: dict | None = None,
 ) -> dict:
     """
     Generate SQL from an English question.
@@ -335,10 +346,12 @@ def generate_sql(
         User's English question.
 
     schema:
-        Optional full schema dictionary.
+        Optional full schema dictionary. Used as a safe fallback when
+        RAG retrieval fails or returns no useful schema.
 
-        It is only used as a safe fallback when RAG retrieval
-        fails or returns no useful schema.
+    retrieved:
+        Optional result of rag.retrieve_schema() the caller already has,
+        so the same retrieval isn't run twice for one question.
 
     Returns
     -------
@@ -353,372 +366,67 @@ def generate_sql(
         "clarification_question": ""
     }
     """
-
-    # ========================================================
-    # VALIDATION
-    # ========================================================
-
     if not db_id:
-        raise ValueError(
-            "db_id is required for SQL generation."
-        )
+        raise ValueError("db_id is required for SQL generation.")
 
     if not question or not question.strip():
+        return _clarification_result("Please enter a question for the database.")
+
+    schema_text = _schema_context(db_id, question, schema, retrieved)
+
+    if schema_text is None:
         return _clarification_result(
-            "Please enter a question for the database."
+            "I couldn't find any relevant tables for that question. "
+            "Could you clarify which table or data you're asking about?"
         )
-
-    logger.info("==========================================")
-    logger.info("RAG → GROQ SQL GENERATION")
-    logger.info("==========================================")
-
-    logger.info(
-        f"Database ID: {db_id}"
-    )
-
-    logger.info(
-        f"Question: {question}"
-    )
-
-
-    # ========================================================
-    # RAG SCHEMA RETRIEVAL
-    # ========================================================
-
-    retrieved_tables = []
-    retrieved_schema_text = None
-
-    try:
-
-        rag_result = rag.retrieve_schema(
-            db_id,
-            question,
-            k=5,
-        )
-
-        retrieved_tables = rag_result.get(
-            "tables",
-            [],
-        )
-
-        documents = rag_result.get(
-            "documents",
-            [],
-        )
-
-        if documents:
-
-            valid_documents = [
-                doc
-                for doc in documents
-                if isinstance(doc, dict)
-                and doc.get("content")
-            ]
-
-            if valid_documents:
-
-                retrieved_schema_text = (
-                    "\n\n---\n\n".join(
-                        doc["content"]
-                        for doc in valid_documents
-                    )
-                )
-
-    except Exception as e:
-
-        logger.error(
-            f"RAG retrieval failed for "
-            f"db_id={db_id}: {e}"
-        )
-
-        retrieved_tables = []
-        retrieved_schema_text = None
-
-
-    logger.info(
-        f"Retrieved tables: {retrieved_tables}"
-    )
-
-
-    # ========================================================
-    # SCHEMA FALLBACK
-    # ========================================================
-
-    if not retrieved_schema_text:
-
-        if schema:
-
-            logger.info(
-                f"Database ID: {db_id} — "
-                f"RAG empty, falling back to full schema."
-            )
-
-            retrieved_schema_text = json.dumps(
-                schema,
-                indent=2,
-                default=str,
-            )
-
-        else:
-
-            logger.info(
-                f"Database ID: {db_id} — "
-                f"no schema available."
-            )
-
-            return _clarification_result(
-                "I couldn't find any relevant tables for "
-                "that question. Could you clarify which "
-                "table or data you're asking about?"
-            )
-
-
-    # ========================================================
-    # BUILD PROMPT
-    # ========================================================
 
     final_prompt = prompt.invoke(
         {
-            "retrieved_schema": retrieved_schema_text,
+            "retrieved_schema": schema_text,
             "question": question,
         }
     )
 
-
-    # ========================================================
-    # CALL GROQ
-    # ========================================================
-
     try:
-
-        response = _invoke_llm(
-            final_prompt,
-            max_attempts=3,
-        )
-
+        response = _invoke_llm(final_prompt)
     except Exception as e:
+        message = _friendly_api_error(e)
+        if message:
+            logger.error(f"Groq call failed: {message}")
+            return _clarification_result(message)
 
-        error_text = str(e)
-        error_lower = error_text.lower()
-
-        # ----------------------------------------------------
-        # RATE LIMIT
-        # ----------------------------------------------------
-
-        if (
-            "429" in error_lower
-            or "rate limit" in error_lower
-            or "rate_limit" in error_lower
-            or "too many requests" in error_lower
-        ):
-
-            logger.error(
-                "Groq rate limit persisted after retries."
-            )
-
-            return _clarification_result(
-                "The Groq AI service is temporarily "
-                "rate-limited. Please wait a little "
-                "and try again."
-            )
-
-        # ----------------------------------------------------
-        # INVALID API KEY
-        # ----------------------------------------------------
-
-        if (
-            "401" in error_lower
-            or "api key" in error_lower
-            or "authentication" in error_lower
-            or "unauthorized" in error_lower
-            or "invalid_api_key" in error_lower
-        ):
-
-            logger.error(
-                "Groq API authentication failed."
-            )
-
-            return _clarification_result(
-                "The Groq API key is invalid or expired. "
-                "Please check your GROQ_API_KEY."
-            )
-
-        # ----------------------------------------------------
-        # QUOTA
-        # ----------------------------------------------------
-
-        if (
-            "quota" in error_lower
-            or "limit" in error_lower
-        ):
-
-            logger.error(
-                "Groq API quota/usage limit reached."
-            )
-
-            return _clarification_result(
-                "The Groq API usage limit has been reached. "
-                "Please check your Groq API usage and limits."
-            )
-
-        # ----------------------------------------------------
-        # OTHER ERROR
-        # ----------------------------------------------------
-
-        logger.exception(
-            "Groq SQL generation failed."
-        )
-
+        logger.exception("Groq SQL generation failed.")
         raise
 
-
-    # ========================================================
-    # EXTRACT MODEL RESPONSE
-    # ========================================================
-
-    content = _extract_json(
-        response.content
-    )
-
-
-    # ========================================================
-    # PARSE JSON
-    # ========================================================
-
     try:
-
-        result = json.loads(
-            content
-        )
-
+        result = json.loads(_extract_json(response.content))
     except json.JSONDecodeError:
+        logger.error(f"Groq returned invalid JSON. Raw response: {response.content}")
+        raise RuntimeError(f"LLM did not return valid JSON:\n{response.content}")
 
-        logger.error(
-            "Groq returned invalid JSON."
-        )
+    if not isinstance(result, dict):
+        raise RuntimeError(f"LLM did not return a JSON object:\n{response.content}")
 
-        logger.error(
-            f"Raw response: {response.content}"
-        )
+    result.setdefault("statements", [])
+    result.setdefault("intent", "other")
+    result.setdefault("target_table", "")
+    result.setdefault("explanation", "")
+    result.setdefault("needs_clarification", False)
+    result.setdefault("clarification_question", "")
 
-        raise RuntimeError(
-            "LLM did not return valid JSON:\n"
-            f"{response.content}"
-        )
+    statements = result["statements"]
+    if not isinstance(statements, list):
+        statements = [str(statements)]
 
+    # Defensive cleanup: drop trailing semicolons, and if the model put
+    # several statements in one string, split them.
+    result["statements"] = [
+        part
+        for stmt in statements
+        if isinstance(stmt, str)
+        for part in split_statements(stmt)
+    ]
 
-    # ========================================================
-    # ENSURE REQUIRED FIELDS
-    # ========================================================
-
-    result.setdefault(
-        "statements",
-        [],
-    )
-
-    result.setdefault(
-        "intent",
-        "other",
-    )
-
-    result.setdefault(
-        "target_table",
-        "",
-    )
-
-    result.setdefault(
-        "explanation",
-        "",
-    )
-
-    result.setdefault(
-        "needs_clarification",
-        False,
-    )
-
-    result.setdefault(
-        "clarification_question",
-        "",
-    )
-
-
-    # ========================================================
-    # VALIDATE STATEMENTS
-    # ========================================================
-
-    if not isinstance(
-        result["statements"],
-        list,
-    ):
-
-        result["statements"] = [
-            str(result["statements"])
-        ]
-
-
-    # ========================================================
-    # CLEAN SQL STATEMENTS
-    # ========================================================
-
-    fixed_statements = []
-
-    for stmt in result["statements"]:
-
-        if not isinstance(
-            stmt,
-            str,
-        ):
-            continue
-
-        stmt = stmt.strip()
-
-        if not stmt:
-            continue
-
-        # Remove trailing semicolon
-        stmt = stmt.rstrip(";").strip()
-
-        if not stmt:
-            continue
-
-        # Defensive cleanup:
-        # If Groq accidentally places multiple SQL statements
-        # in one string, split them.
-        parts = [
-            part.strip()
-            for part in stmt.split(";")
-            if part.strip()
-        ]
-
-        fixed_statements.extend(
-            parts
-        )
-
-
-    result["statements"] = fixed_statements
-
-
-    # ========================================================
-    # FINAL LOGGING
-    # ========================================================
-
-    logger.info(
-        f"Generated SQL: "
-        f"{result['statements']}"
-    )
-
-    logger.info(
-        f"Intent: {result['intent']}"
-    )
-
-    logger.info(
-        f"Target table: "
-        f"{result['target_table']}"
-    )
-
-    logger.info(
-        "=========================================="
-    )
-
+    logger.info(f"Generated SQL: {result['statements']} (intent={result['intent']})")
 
     return result

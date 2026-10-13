@@ -1,7 +1,7 @@
 """
 LangGraph agent orchestrating the existing Eng2SQL pipeline.
 
-PHASE 1: analyze_result asks Mistral to interpret the actual SQL result.
+PHASE 1: analyze_result asks the LLM to interpret the actual SQL result.
 PHASE 2: decide_visualization inspects SQL result shape and picks a chart.
 PHASE 3: conversation memory — load_memory / resolve_follow_up / save_memory
          wrap the existing flow so follow-up questions ("them", "those",
@@ -22,20 +22,15 @@ from app import rag
 from app import llm as llm_module
 from app import memory as memory_module
 from app.db_utils import (
-    build_preview_sql,
+    build_previews,
     run_select,
     validate_statements,
 )
 
 logger = logging.getLogger("agent")
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    _handler = logging.StreamHandler()
-    _handler.setFormatter(logging.Formatter("[%(levelname)s] %(name)s: %(message)s"))
-    logger.addHandler(_handler)
 
 MAX_CORRECTION_ATTEMPTS = 3
-MAX_ROWS_FOR_LLM = 20        # cap rows sent to Mistral for analysis
+MAX_ROWS_FOR_LLM = 20        # cap rows sent to the LLM for analysis
 MAX_ROWS_FOR_CHART = 100     # cap rows used to build chart_data
 
 
@@ -118,7 +113,7 @@ def load_memory_node(state: AgentState) -> AgentState:
 def resolve_follow_up_node(state: AgentState) -> AgentState:
     """
     Rewrites ambiguous follow-up questions ("them", "those", "only above
-    X") into standalone questions using conversation_history + Mistral.
+    X") into standalone questions using conversation_history + the LLM.
     Leaves standalone questions unchanged. Sets needs_clarification when
     the reference can't be resolved.
     """
@@ -134,15 +129,11 @@ def resolve_follow_up_node(state: AgentState) -> AgentState:
         logger.info(f"STANDALONE QUESTION: {original_question}")
         return state
 
-    session_id = state.get("session_id") or ""
-    db_id = state.get("db_id") or ""
-
     try:
         result = memory_module.resolve_follow_up(
-            session_id=session_id,
-            db_id=db_id,
             question=original_question,
-            llm_invoke_fn=llm_module.llm.invoke,
+            history=state.get("conversation_history") or [],
+            llm_invoke_fn=llm_module.invoke_text,
         )
     except Exception as e:
         logger.error(f"resolve_follow_up failed, using original question: {e}")
@@ -256,7 +247,7 @@ def retrieve_schema_node(state: AgentState) -> AgentState:
     question = state.get("standalone_question") or state["question"]
 
     try:
-        result = rag.retrieve_schema(db_id, question, k=5)
+        result = rag.retrieve_schema(db_id, question, schema=state.get("schema"))
     except Exception as e:
         logger.error(f"Agent RAG retrieval failed for db_id={db_id}: {e}")
         result = {"tables": [], "documents": []}
@@ -279,6 +270,7 @@ def generate_sql_node(state: AgentState) -> AgentState:
             db_id=db_id,
             question=question,
             schema=full_schema,
+            retrieved=state.get("retrieved_schema"),
         )
     except Exception as e:
         logger.error(f"Agent SQL generation failed for db_id={db_id}: {e}")
@@ -360,6 +352,9 @@ def correct_sql_node(state: AgentState) -> AgentState:
             db_id=db_id,
             question=correction_question,
             schema=full_schema,
+            # Same tables as the first attempt — the appended error text
+            # must not skew which tables get retrieved.
+            retrieved=state.get("retrieved_schema"),
         )
     except Exception as e:
         logger.error(f"Agent SQL correction failed for db_id={db_id}: {e}")
@@ -396,19 +391,18 @@ def execute_sql_node(state: AgentState) -> AgentState:
         }
         return state
 
+    statements = [sql for sql, _, _ in validated]
     stmt_types = {stmt_type for (_, _, stmt_type) in validated}
 
     if stmt_types == {"select"}:
-        results = []
         try:
-            for sql, _, _ in validated:
-                results.append(run_select(db_path, sql))
+            results = [run_select(db_path, sql) for sql in statements]
         except Exception as e:
             logger.info("Execution status: error")
             state["execution_status"] = "error"
             state["execution_result"] = {
                 "status": "error",
-                "statements": [sql for sql, _, _ in validated],
+                "statements": statements,
                 "error": str(e),
             }
             return state
@@ -417,34 +411,19 @@ def execute_sql_node(state: AgentState) -> AgentState:
         state["execution_status"] = "executed"
         state["execution_result"] = {
             "status": "executed",
-            "statements": [sql for sql, _, _ in validated],
+            "statements": statements,
             "explanation": state.get("explanation", ""),
             "results": results,
         }
         return state
 
-    previews = []
-    for sql, expr, stmt_type in validated:
-        preview = {"sql": sql, "type": stmt_type, "affected_count": None, "sample_rows": None}
-        try:
-            count_sql, sample_sql = build_preview_sql(expr, stmt_type)
-            if count_sql:
-                count_data = run_select(db_path, count_sql)
-                sample_data = run_select(db_path, sample_sql)
-                if count_data["rows"]:
-                    preview["affected_count"] = count_data["rows"][0].get("affected_count")
-                preview["sample_rows"] = sample_data["rows"]
-        except Exception:
-            pass
-        previews.append(preview)
-
     logger.info("Execution status: confirmation_required")
     state["execution_status"] = "confirmation_required"
     state["execution_result"] = {
         "status": "confirmation_required",
-        "statements": [sql for sql, _, _ in validated],
+        "statements": statements,
         "explanation": state.get("explanation", ""),
-        "previews": previews,
+        "previews": build_previews(db_path, validated),
     }
     return state
 
@@ -455,7 +434,7 @@ def execute_sql_node(state: AgentState) -> AgentState:
 
 def analyze_result_node(state: AgentState) -> AgentState:
     """
-    Interprets the SQL result via Mistral. NEVER performs computation the
+    Interprets the SQL result via the LLM. NEVER performs computation the
     database already did — only explains/summarizes returned rows.
     On any failure, falls back to a generic but accurate message and does
     NOT fail the query.
@@ -475,6 +454,8 @@ def analyze_result_node(state: AgentState) -> AgentState:
     columns = first.get("columns", [])
     all_rows = first.get("rows", [])
     row_count = len(all_rows)
+    # The result set is capped; don't let the model report the cap as the total.
+    row_count_text = f"more than {row_count}" if first.get("truncated") else str(row_count)
 
     if row_count == 0:
         state["final_answer"] = "No matching records were found."
@@ -502,21 +483,20 @@ def analyze_result_node(state: AgentState) -> AgentState:
             "what was found and the row count rather than listing every row.\n\n"
             f"Question: {question}\n"
             f"Columns: {columns}\n"
-            f"Total row count: {row_count}\n"
+            f"Total row count: {row_count_text}\n"
             f"Rows (showing up to {MAX_ROWS_FOR_LLM}): {sample_rows}\n\n"
             "Give the direct answer now, in plain text, no markdown."
         )
 
-        response = llm_module.llm.invoke(analysis_prompt)
-        answer = (response.content or "").strip()
+        answer = llm_module.invoke_text(analysis_prompt)
         state["final_answer"] = answer if answer else (
-            f"Query executed successfully and returned {row_count} row(s)."
+            f"Query executed successfully and returned {row_count_text} row(s)."
         )
     except Exception as e:
         logger.error(f"Agent result analysis failed: {e}")
         # Do NOT fail the query — fall back to a safe generic message.
         state["final_answer"] = (
-            f"Query executed successfully and returned {row_count} row(s)."
+            f"Query executed successfully and returned {row_count_text} row(s)."
         )
 
     return state
@@ -739,7 +719,13 @@ def final_response_node(state: AgentState) -> AgentState:
         }
         return state
 
-    result = dict(state.get("execution_result", {}))
+    # Reached without executing anything (e.g. the model returned no
+    # statements and asked for no clarification) — report it, don't
+    # return an empty result.
+    result = dict(state.get("execution_result") or {
+        "status": "error",
+        "error": state.get("validation_error") or "No SQL statements were generated.",
+    })
 
     if state.get("execution_status") == "executed":
         if state.get("final_answer"):
@@ -770,16 +756,10 @@ def final_response_node(state: AgentState) -> AgentState:
 # Routing
 # --------------------------------------------------------------------------
 
-def _route_after_understand(state: AgentState) -> str:
+def _route_unless_clarification(state: AgentState) -> str:
     if state.get("needs_clarification"):
         return "final_response"
-    return "retrieve_schema"
-
-
-def _route_after_resolve_follow_up(state: AgentState) -> str:
-    if state.get("needs_clarification"):
-        return "final_response"
-    return "retrieve_schema"
+    return "continue"
 
 
 def _route_after_generate(state: AgentState) -> str:
@@ -830,14 +810,14 @@ def build_agent():
 
     graph.add_conditional_edges(
         "understand_question",
-        _route_after_understand,
-        {"retrieve_schema": "resolve_follow_up", "final_response": "final_response"},
+        _route_unless_clarification,
+        {"continue": "resolve_follow_up", "final_response": "final_response"},
     )
 
     graph.add_conditional_edges(
         "resolve_follow_up",
-        _route_after_resolve_follow_up,
-        {"retrieve_schema": "retrieve_schema", "final_response": "final_response"},
+        _route_unless_clarification,
+        {"continue": "retrieve_schema", "final_response": "final_response"},
     )
 
     graph.add_edge("retrieve_schema", "generate_sql")
@@ -903,7 +883,11 @@ def run_agent(db_id: str, question: str, schema: dict, db_path: str,
     agent = get_agent()
     final_state = agent.invoke(initial_state)
 
-    return final_state.get("execution_result", {
+    result = final_state.get("execution_result") or {
         "status": "error",
         "error": "Agent did not produce a result.",
-    })
+    }
+    # How the question was understood after follow-up resolution — kept in
+    # the query history and shown in the UI when it differs from the input.
+    result.setdefault("standalone_question", final_state.get("standalone_question"))
+    return result

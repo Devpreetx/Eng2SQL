@@ -28,8 +28,8 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
+from app.config import DATA_DIR
+
 DB_PATH = os.path.join(DATA_DIR, "history.sqlite")
 
 VALID_STATUSES = {
@@ -42,7 +42,6 @@ VALID_STATUSES = {
 
 
 def _connect() -> sqlite3.Connection:
-    os.makedirs(DATA_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -71,12 +70,17 @@ def init_db() -> None:
             )
             """
         )
+        # Serves the only list query: one database, newest first.
         conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_history_db_id ON query_history(db_id)"
+            "CREATE INDEX IF NOT EXISTS idx_history_db_time "
+            "ON query_history(db_id, timestamp DESC)"
         )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_history_timestamp ON query_history(timestamp)"
-        )
+        # Added after the first release: starred ("saved") queries.
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(query_history)")}
+        if "starred" not in columns:
+            conn.execute("ALTER TABLE query_history ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")
+        conn.execute("DROP INDEX IF EXISTS idx_history_db_id")
+        conn.execute("DROP INDEX IF EXISTS idx_history_timestamp")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_history_session_id ON query_history(session_id)"
         )
@@ -213,6 +217,7 @@ def _row_to_summary(row: sqlite3.Row) -> dict:
         "row_count": row["row_count"],
         "chart_type": row["chart_type"],
         "explanation": row["explanation"],
+        "starred": bool(row["starred"]),
     }
 
 
@@ -222,12 +227,13 @@ def list_history(
     offset: int = 0,
     search: str | None = None,
     status: str | None = None,
+    starred: bool = False,
 ) -> dict:
     """
     Returns {"items": [...], "total": N} for the given database, newest
     first. `search` matches question, standalone_question, or the SQL
     text (case-insensitive substring). `status` filters to an exact
-    status, or is ignored if None/"all".
+    status, or is ignored if None/"all". `starred` keeps starred rows only.
     """
     limit = max(1, min(limit, 200))
     offset = max(0, offset)
@@ -238,6 +244,9 @@ def list_history(
     if status and status.lower() != "all":
         where.append("status = ?")
         params.append(status.lower())
+
+    if starred:
+        where.append("starred = 1")
 
     if search and search.strip():
         term = f"%{search.strip()}%"
@@ -286,3 +295,24 @@ def get_history_detail(history_id: str) -> dict | None:
         return None
 
     return _row_to_summary(row)
+
+def set_starred(history_id: str, starred: bool) -> None:
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE query_history SET starred = ? WHERE history_id = ?",
+            (1 if starred else 0, history_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_for_db(db_id: str) -> None:
+    """Remove every history row of a database that is being deleted."""
+    conn = _connect()
+    try:
+        conn.execute("DELETE FROM query_history WHERE db_id = ?", (db_id,))
+        conn.commit()
+    finally:
+        conn.close()

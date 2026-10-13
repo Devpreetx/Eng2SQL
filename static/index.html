@@ -1,263 +1,486 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>eng2sql — database console</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Eng2SQL — ask your database in plain English</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script src="theme.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="app">
+<!-- Icon sprite: referenced as <svg class="icon"><use href="#i-name"/></svg> -->
+<svg xmlns="http://www.w3.org/2000/svg" hidden>
+  <defs>
+    <g id="i-database"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></g>
+    <g id="i-table"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+    <g id="i-upload"><path d="M12 16V5M7 10l5-5 5 5M5 19h14"/></g>
+    <g id="i-download"><path d="M12 5v11M7 11l5 5 5-5M5 19h14"/></g>
+    <g id="i-chevron"><path d="M9 6l6 6-6 6"/></g>
+    <g id="i-search"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></g>
+    <g id="i-menu"><path d="M4 7h16M4 12h16M4 17h16"/></g>
+    <g id="i-close"><path d="M6 6l12 12M18 6L6 18"/></g>
+    <g id="i-sun"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4"/></g>
+    <g id="i-moon"><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/></g>
+    <g id="i-play"><path d="M8 5.5v13l10-6.5z"/></g>
+    <g id="i-copy"><rect x="9" y="9" width="10" height="11" rx="2"/><path d="M15 9V6a2 2 0 00-2-2H7a2 2 0 00-2 2v9a2 2 0 002 2h2"/></g>
+    <g id="i-check"><path d="M5 12.5l4.5 4.5L19 7.5"/></g>
+    <g id="i-send"><path d="M12 19V5M6 11l6-6 6 6"/></g>
+    <g id="i-code"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></g>
+    <g id="i-chat"><path d="M5 5h14a2 2 0 012 2v8a2 2 0 01-2 2h-7l-4.5 3.5V17H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></g>
+    <g id="i-key"><circle cx="8" cy="14" r="3.5"/><path d="M10.5 11.5L19 3M15 7l3 3"/></g>
+    <g id="i-more"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></g>
+    <g id="i-star"><path d="M12 4l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z"/></g>
+    <g id="i-edit"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></g>
+    <g id="i-trash"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></g>
+    <g id="i-clock"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></g>
+    <g id="i-undo"><path d="M8 5L4 9l4 4"/><path d="M4 9h10a5 5 0 010 10h-3"/></g>
+    <g id="i-logout"><path d="M14 5h4a1 1 0 011 1v12a1 1 0 01-1 1h-4M10 8l-4 4 4 4M6 12h9"/></g>
+    <g id="i-lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></g>
+    <g id="i-wand"><path d="M5 19L16 8M14 6l4 4M18 3v3M16.5 4.5h3M7 4v2M6 5h2M19 14v2M18 15h2"/></g>
+    <g id="i-shield"><path d="M12 3l7 3v5c0 4.5-2.9 8.3-7 10-4.1-1.7-7-5.5-7-10V6z"/><path d="M9 12l2.2 2.2L15 10.5"/></g>
+    <g id="i-chart"><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6"/></g>
+  </defs>
+</svg>
 
-  <!-- ============ SIDEBAR ============ -->
-  <aside class="sidebar">
+<!-- ============ SIGN IN / CREATE ACCOUNT ============ -->
+<div class="auth" id="authView" hidden>
+  <section class="auth-aside">
     <div class="brand">
-      <span class="brand-mark">▚</span>
-      <span class="brand-name">eng2sql</span>
+      <span class="brand-mark"><svg class="icon" viewBox="0 0 24 24"><use href="#i-database"/></svg></span>
+      <span class="brand-name">Eng2SQL</span>
     </div>
+    <div class="auth-pitch">
+      <h1>Ask your data anything.</h1>
+      <p>Plain-English questions in, SQL you can read and results you can trust out.</p>
+      <ul class="auth-points">
+        <li>
+          <span class="point-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-chat"/></svg></span>
+          <div><strong>Natural-language queries</strong><span>Answers, charts and the exact SQL behind them.</span></div>
+        </li>
+        <li>
+          <span class="point-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-shield"/></svg></span>
+          <div><strong>Safe by default</strong><span>Every change is previewed, confirmed and backed up first.</span></div>
+        </li>
+        <li>
+          <span class="point-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-lock"/></svg></span>
+          <div><strong>Private to you</strong><span>Your databases, history and backups are only visible to your account.</span></div>
+        </li>
+      </ul>
+    </div>
+    <p class="auth-foot">SQLite · CSV · Excel</p>
+  </section>
 
-    <div class="upload-zone" id="uploadZone">
-      <input
-        type="file"
-        id="fileInput"
-        accept=".db,.sqlite,.sqlite3,.csv,.xlsx"
-        hidden
-      />
-      <button class="btn-new-db" id="newDbBtn">
-        <span class="btn-icon">＋</span> New Database
+  <section class="auth-main">
+    <form class="auth-card" id="authForm" novalidate>
+      <h2 id="authTitle">Sign in</h2>
+      <p class="auth-sub" id="authSubtitle">Welcome back. Enter your details to continue.</p>
+
+      <label class="field" id="authNameField" hidden>
+        <span class="field-label">Name</span>
+        <input type="text" id="authName" autocomplete="name" maxlength="80">
+      </label>
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input type="email" id="authEmail" autocomplete="username" maxlength="254" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input type="password" id="authPassword" autocomplete="current-password" maxlength="256" required>
+      </label>
+      <p class="hint" id="authPasswordHint" hidden>At least 8 characters.</p>
+
+      <p class="form-error" id="authError" role="alert" hidden></p>
+
+      <button class="btn btn-primary btn-block btn-lg" id="authSubmit" type="submit">Sign in</button>
+
+      <p class="auth-switch" id="authSwitchRow">
+        <span id="authSwitchText">New here?</span>
+        <button class="link" id="authSwitch" type="button">Create an account</button>
+      </p>
+    </form>
+  </section>
+</div>
+
+<!-- ============ APP ============ -->
+<div class="app" id="app" hidden>
+
+  <!-- ---- SIDEBAR ---- -->
+  <aside class="sidebar" id="sidebar" aria-label="Databases and history">
+    <div class="sidebar-head">
+      <div class="brand">
+        <span class="brand-mark"><svg class="icon" viewBox="0 0 24 24"><use href="#i-database"/></svg></span>
+        <span class="brand-name">Eng2SQL</span>
+      </div>
+      <button class="icon-btn sidebar-close" id="sidebarClose" type="button" aria-label="Close menu">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
       </button>
-      <button class="btn-upload" id="uploadBtn">
-        <span class="btn-icon">↑</span> Open Database
+    </div>
+
+    <div class="sidebar-actions">
+      <input type="file" id="fileInput" accept=".db,.sqlite,.sqlite3,.csv,.xlsx" hidden>
+      <button class="btn btn-primary" id="newDbBtn" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-plus"/></svg> New database
       </button>
-      <p class="upload-hint">.db · .sqlite · .sqlite3 · .csv · .xlsx</p>
-      <p class="upload-status" id="uploadStatus"></p>
+      <button class="btn" id="uploadBtn" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-upload"/></svg> Open file
+      </button>
+      <p class="hint">.db · .sqlite · .sqlite3 · .csv · .xlsx</p>
     </div>
 
-    <!-- ============ DATABASES (multi-db workspace) ============ -->
-    <div class="databases-panel" id="databasesPanel">
-      <div class="schema-heading">
-        <span>databases</span>
-        <span class="schema-count" id="databaseCount"></span>
-      </div>
-      <div id="databaseList"></div>
-    </div>
-
-    <div class="schema-panel" id="schemaPanel" hidden>
-      <div class="schema-heading">
-        <span>schema</span>
-        <span class="schema-count" id="tableCount"></span>
-      </div>
-
-      <div class="schema-tree" id="schemaTree"></div>
-    </div>
-
-    <div class="database-actions">
-      <button class="btn-create-table" id="createTableBtn" disabled>
-        ＋ Create Table
+    <div class="segmented side-tabs" role="tablist">
+      <button class="segment active" id="sideTabExplorer" type="button" role="tab" aria-selected="true" aria-controls="paneExplorer">Explorer</button>
+      <button class="segment" id="sideTabHistory" type="button" role="tab" aria-selected="false" aria-controls="paneHistory">
+        History <span class="count" id="historyTotalCount"></span>
       </button>
     </div>
 
-    <!-- ============ HISTORY (Advanced Query History) ============ -->
-    <div class="history-panel" id="historyPanel">
-      <div class="schema-heading">
-        <span>history</span>
-        <span class="schema-count" id="historyTotalCount"></span>
+    <!-- Explorer: databases + schema of the active one -->
+    <div class="side-pane" id="paneExplorer" role="tabpanel">
+      <section class="side-section">
+        <h2 class="side-heading">Databases <span class="count" id="databaseCount"></span></h2>
+        <div id="databaseList"></div>
+      </section>
+
+      <section class="side-section" id="schemaPanel" hidden>
+        <h2 class="side-heading">
+          Tables <span class="count" id="tableCount"></span>
+          <span class="side-heading-actions">
+            <button class="icon-btn" id="createTableBtn" type="button" title="Create table" aria-label="Create table">
+              <svg class="icon" viewBox="0 0 24 24"><use href="#i-plus"/></svg>
+            </button>
+            <button class="icon-btn" id="importBtn" type="button" title="Import CSV / XLSX into a table" aria-label="Import CSV or XLSX into a table">
+              <svg class="icon" viewBox="0 0 24 24"><use href="#i-upload"/></svg>
+            </button>
+          </span>
+        </h2>
+        <div class="schema-tree" id="schemaTree"></div>
+      </section>
+    </div>
+
+    <!-- History: searchable, filterable, paginated -->
+    <div class="side-pane" id="paneHistory" role="tabpanel" hidden>
+      <div class="search-field">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-search"/></svg>
+        <input type="search" id="historySearch" placeholder="Search questions and SQL" autocomplete="off" aria-label="Search history" disabled>
       </div>
 
-      <div class="history-search-row">
-        <input
-          type="text"
-          id="historySearch"
-          class="history-search-input"
-          placeholder="Search history…"
-          autocomplete="off"
-          disabled
-        />
-      </div>
-
-      <div class="history-filters" id="historyFilters">
-        <button class="history-filter-chip active" data-status="all" type="button">All</button>
-        <button class="history-filter-chip" data-status="executed" type="button">Executed</button>
-        <button class="history-filter-chip" data-status="rejected" type="button">Rejected</button>
-        <button class="history-filter-chip" data-status="cancelled" type="button">Cancelled</button>
-        <button class="history-filter-chip" data-status="error" type="button">Error</button>
+      <div class="chips" id="historyFilters">
+        <button class="chip active" data-status="all" type="button">All</button>
+        <button class="chip" data-status="starred" type="button">Starred</button>
+        <button class="chip" data-status="executed" type="button">Executed</button>
+        <button class="chip" data-status="rejected" type="button">Rejected</button>
+        <button class="chip" data-status="cancelled" type="button">Cancelled</button>
+        <button class="chip" data-status="error" type="button">Error</button>
       </div>
 
       <div class="history-list" id="historyList">
-        <p class="history-empty">No database selected.</p>
+        <p class="empty-note">Select a database to see its history.</p>
       </div>
 
-      <div class="history-pagination" id="historyPagination"></div>
+      <div class="pager" id="historyPagination"></div>
     </div>
 
-    <div class="sidebar-footer">
-      <div class="conn-dot" id="connDot"></div>
-      <span id="connLabel">no database loaded</span>
+    <div class="sidebar-foot">
+      <button class="user-chip" id="userMenuBtn" type="button" aria-haspopup="menu" aria-label="Account menu">
+        <span class="avatar" id="userAvatar"></span>
+        <span class="user-meta">
+          <span class="user-name" id="userName"></span>
+          <span class="user-email" id="userEmail"></span>
+        </span>
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-more"/></svg>
+      </button>
     </div>
   </aside>
 
-  <!-- ============ MAIN ============ -->
+  <div class="scrim" id="scrim" hidden></div>
+
+  <!-- ---- MAIN ---- -->
   <main class="main">
-
-    <!-- ============ MODE TABS: AI Chat / SQL Workspace ============ -->
-    <div class="mode-tabs">
-      <button class="mode-tab active" id="tabChat" type="button">
-        <span class="mode-tab-icon">✦</span> AI Chat
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" type="button" aria-label="Open menu">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-menu"/></svg>
       </button>
-      <button class="mode-tab" id="tabWorkspace" type="button">
-        <span class="mode-tab-icon">⌗</span> SQL Workspace
+
+      <div class="segmented mode-tabs" role="tablist">
+        <button class="segment active" id="tabChat" type="button" role="tab" aria-selected="true">
+          <svg class="icon" viewBox="0 0 24 24"><use href="#i-chat"/></svg> AI Chat
+        </button>
+        <button class="segment" id="tabWorkspace" type="button" role="tab" aria-selected="false">
+          <svg class="icon" viewBox="0 0 24 24"><use href="#i-code"/></svg> SQL Workspace
+        </button>
+      </div>
+
+      <span class="db-chip" id="activeDbChip" title="Active database">No database</span>
+
+      <button class="btn btn-sm" id="newChatBtn" type="button" title="Start a new conversation (clears the AI's memory of this one)">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-plus"/></svg> <span class="btn-label">New chat</span>
       </button>
-    </div>
+    </header>
 
-    <div class="log" id="log">
-      <div class="empty-state" id="emptyState">
-        <div class="empty-glyph">⌁</div>
-        <p>Open a SQLite database, then describe what you want in plain English.</p>
-        <p class="empty-sub">Reads run immediately. Anything that changes data is previewed first — nothing writes without your confirmation.</p>
-      </div>
-    </div>
+    <!-- AI Chat -->
+    <section class="chat" id="chatView">
+      <div class="log" id="log" aria-live="polite">
+        <div class="empty-state" id="emptyState">
+          <span class="empty-mark"><svg class="icon" viewBox="0 0 24 24"><use href="#i-database"/></svg></span>
+          <h1>Ask your database in plain English</h1>
+          <p id="emptyLead">Open a SQLite, CSV or Excel file — or create a new database — then describe what you want.</p>
 
-    <div class="prompt-bar">
-      <span class="prompt-caret">sql&gt;</span>
-      <input
-        type="text"
-        id="question"
-        placeholder="describe what you want…"
-        autocomplete="off"
-        disabled
-      />
-      <button class="btn-run" id="askBtn" disabled>Run</button>
-    </div>
+          <div class="suggestions" id="suggestions" hidden></div>
 
-    <!-- ============ SQL WORKSPACE (center area, hidden by default) ============ -->
-    <section class="sql-workspace" id="sqlWorkspace" hidden>
-      <div class="workspace-header">
-        <span class="workspace-title">SQL WORKSPACE</span>
-        <span class="workspace-dbtag" id="workspaceDbTag">no database selected</span>
-      </div>
-
-      <div class="workspace-editor-wrap">
-        <textarea
-          id="sqlEditor"
-          class="sql-editor"
-          spellcheck="false"
-          placeholder="SELECT * FROM users WHERE city = 'Ghaziabad';"
-          disabled
-        ></textarea>
-      </div>
-
-      <div class="workspace-toolbar">
-        <button class="btn-run-sql" id="runSqlBtn" disabled>▶ Run SQL</button>
-        <button class="btn-clear-sql" id="clearSqlBtn" disabled>Clear</button>
-        <span class="workspace-hint">Ctrl+Enter to run</span>
-        <span class="workspace-status" id="workspaceStatus">Status: Ready</span>
-      </div>
-
-      <div class="workspace-results" id="workspaceResults"></div>
-    </section>
-
-  </main>
-
-  <!-- ============ TABLE PREVIEW (right panel) ============ -->
-  <aside id="tablePreviewPanel" class="table-preview-panel" hidden></aside>
-
-</div>
-
-<!-- CREATE TABLE MODAL -->
-<div class="modal-overlay" id="createTableModal" hidden>
-  <div class="modal">
-    <div class="modal-header">
-      <h2>Create Table</h2>
-      <button
-        class="modal-close"
-        id="closeCreateTable"
-        type="button">
-        ×
-      </button>
-    </div>
-    <div class="modal-body">
-      <label for="tableNameInput">Table name</label>
-      <input
-        type="text"
-        id="tableNameInput"
-        placeholder="e.g. employees"
-        autocomplete="off"
-      />
-      <div class="columns-header">
-        <span>Columns</span>
-      </div>
-      <div id="columnList">
-        <div class="column-row">
-          <input
-            class="column-name"
-            type="text"
-            placeholder="Column name"
-          />
-          <select class="column-type">
-            <option value="TEXT">TEXT</option>
-            <option value="INTEGER">INTEGER</option>
-            <option value="REAL">REAL</option>
-            <option value="NUMERIC">NUMERIC</option>
-            <option value="BLOB">BLOB</option>
-          </select>
-          <button
-            class="remove-column"
-            type="button">
-            ×
-          </button>
+          <div class="feature-grid">
+            <div class="feature">
+              <span class="feature-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-chart"/></svg></span>
+              <strong>Answers with evidence</strong>
+              <span>A plain-language answer, a chart when it helps, and the SQL that produced it.</span>
+            </div>
+            <div class="feature">
+              <span class="feature-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-shield"/></svg></span>
+              <strong>Nothing changes silently</strong>
+              <span>Writes show what they will affect and wait for your confirmation.</span>
+            </div>
+            <div class="feature">
+              <span class="feature-icon"><svg class="icon" viewBox="0 0 24 24"><use href="#i-undo"/></svg></span>
+              <strong>One-click undo</strong>
+              <span>Each change is backed up first, so you can roll it back.</span>
+            </div>
+          </div>
         </div>
       </div>
-      <button
-        class="btn-add-column"
-        id="addColumnBtn"
-        type="button">
-        ＋ Add Column
+
+      <form class="composer" id="composer">
+        <textarea id="question" rows="1" placeholder="Open a database to start asking…" aria-label="Your question" disabled></textarea>
+        <button class="btn btn-primary btn-send" id="askBtn" type="submit" aria-label="Ask" disabled>
+          <svg class="icon" viewBox="0 0 24 24"><use href="#i-send"/></svg>
+        </button>
+      </form>
+      <p class="composer-note">Enter to send · Shift + Enter for a new line · AI-generated SQL is always shown — review it before confirming changes.</p>
+    </section>
+
+    <!-- SQL Workspace -->
+    <section class="workspace" id="sqlWorkspace" hidden>
+      <div class="editor">
+        <textarea id="sqlEditor" class="sql-editor" spellcheck="false" aria-label="SQL editor"
+          placeholder="SELECT * FROM users WHERE city = 'Ghaziabad';" disabled></textarea>
+        <div class="editor-toolbar">
+          <button class="btn btn-primary" id="runSqlBtn" type="button" disabled>
+            <svg class="icon icon-fill" viewBox="0 0 24 24"><use href="#i-play"/></svg> Run SQL
+          </button>
+          <button class="btn" id="formatSqlBtn" type="button" title="Tidy up the SQL layout" disabled>
+            <svg class="icon" viewBox="0 0 24 24"><use href="#i-wand"/></svg> Format
+          </button>
+          <button class="btn" id="clearSqlBtn" type="button" disabled>Clear</button>
+          <span class="hint kbd-hint">Ctrl + Enter to run</span>
+          <span class="status-pill" id="workspaceStatus">Ready</span>
+        </div>
+      </div>
+      <div class="workspace-results" id="workspaceResults"></div>
+    </section>
+  </main>
+
+  <!-- ---- TABLE PREVIEW (right panel) ---- -->
+  <aside class="preview" id="tablePreviewPanel" aria-label="Table preview" hidden>
+    <header class="preview-head">
+      <div class="preview-title">
+        <strong id="previewName"></strong>
+        <span id="previewCount"></span>
+      </div>
+      <button class="btn btn-sm" id="previewExportCsv" type="button">CSV</button>
+      <button class="btn btn-sm" id="previewExportXlsx" type="button">XLSX</button>
+      <button class="icon-btn" id="closePreview" type="button" aria-label="Close table preview">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
       </button>
-    </div>
-    <div class="modal-footer">
-      <button
-        class="btn-cancel"
-        id="cancelCreateTable"
-        type="button">
-        Cancel
+    </header>
+    <div class="preview-body" id="previewContent"></div>
+    <footer class="preview-foot">
+      <div class="pager" id="previewPagination"></div>
+      <button class="btn btn-block" id="previewOpenWorkspace" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-code"/></svg> Open SELECT in SQL Workspace
       </button>
-      <button
-        class="btn-create"
-        id="submitCreateTable"
-        type="button">
-        Create Table
-      </button>
-    </div>
-  </div>
+    </footer>
+  </aside>
+
 </div>
 
-<!-- HISTORY DETAIL MODAL -->
-<div class="modal-overlay" id="historyDetailModal" hidden>
-  <div class="modal modal-wide">
-    <div class="modal-header">
-      <h2>Query Details</h2>
-      <button
-        class="modal-close"
-        id="closeHistoryDetail"
-        type="button">
-        ×
+<!-- Floating menu (account menu, database actions) -->
+<div class="menu" id="menu" role="menu" hidden></div>
+
+<!-- ============ ONE-FIELD PROMPT (new database, rename) ============ -->
+<dialog class="modal" id="promptModal" aria-labelledby="promptTitle">
+  <form id="promptForm">
+    <header class="modal-head">
+      <h2 id="promptTitle"></h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label" id="promptLabel"></span>
+        <input type="text" id="promptInput" autocomplete="off" maxlength="80" required autofocus>
+      </label>
+      <p class="hint" id="promptHint"></p>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" id="promptSubmit" type="submit"></button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- ============ CONFIRMATION ============ -->
+<dialog class="modal" id="confirmModal" aria-labelledby="confirmTitle">
+  <header class="modal-head">
+    <h2 id="confirmTitle"></h2>
+    <button class="icon-btn" type="button" data-close aria-label="Close">
+      <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+    </button>
+  </header>
+  <div class="modal-body">
+    <p id="confirmMessage"></p>
+  </div>
+  <footer class="modal-foot">
+    <button class="btn" type="button" data-close autofocus>Cancel</button>
+    <button class="btn btn-primary" id="confirmAccept" type="button"></button>
+  </footer>
+</dialog>
+
+<!-- ============ CREATE TABLE ============ -->
+<dialog class="modal" id="createTableModal" aria-labelledby="createTableTitle">
+  <form id="createTableForm">
+    <header class="modal-head">
+      <h2 id="createTableTitle">Create table</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">Table name</span>
+        <input type="text" id="tableNameInput" placeholder="e.g. employees" autocomplete="off" required autofocus>
+      </label>
+      <span class="field-label">Columns</span>
+      <div id="columnList"></div>
+      <button class="btn btn-dashed btn-block" id="addColumnBtn" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-plus"/></svg> Add column
       </button>
     </div>
-    <div class="modal-body" id="historyDetailBody">
-      <!-- populated by script.js -->
-    </div>
-    <div class="modal-footer history-detail-footer">
-      <button class="btn-cancel" id="historyDetailClose" type="button">Close</button>
-      <button class="btn-secondary" id="historyDetailOpenSql" type="button">⌗ Open in SQL Workspace</button>
-      <button class="btn-create" id="historyDetailReuse" type="button">↺ Reuse Question</button>
-    </div>
-  </div>
-</div>
+    <footer class="modal-foot">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" id="submitCreateTable" type="submit">Create table</button>
+    </footer>
+  </form>
+</dialog>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="/script.js?v=12"></script>
+<!-- ============ IMPORT CSV / XLSX ============ -->
+<dialog class="modal" id="importModal" aria-labelledby="importTitle">
+  <form id="importForm">
+    <header class="modal-head">
+      <h2 id="importTitle">Import into a table</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">File (.csv or .xlsx)</span>
+        <input type="file" id="importFileInput" accept=".csv,.xlsx" required autofocus>
+      </label>
+      <label class="field">
+        <span class="field-label">Target table</span>
+        <input type="text" id="importTableName" placeholder="letters, numbers, underscores" autocomplete="off" required>
+      </label>
+      <label class="field">
+        <span class="field-label">If the table exists</span>
+        <select id="importMode">
+          <option value="new">Stop — only create a new table</option>
+          <option value="append">Append rows to it</option>
+          <option value="replace">Replace it entirely</option>
+        </select>
+      </label>
+      <p class="hint">A backup of the database is saved before anything is imported.</p>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" id="submitImport" type="submit">Import</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- ============ BACKUPS ============ -->
+<dialog class="modal modal-wide" id="backupsModal" aria-labelledby="backupsTitle">
+  <header class="modal-head">
+    <h2 id="backupsTitle">Backups</h2>
+    <button class="icon-btn" type="button" data-close aria-label="Close">
+      <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+    </button>
+  </header>
+  <div class="modal-body">
+    <p class="hint">A backup is saved automatically before every change. Restoring one puts the whole database back to that moment — and backs up the current state first, so a restore can itself be undone.</p>
+    <div class="backup-list" id="backupList"></div>
+  </div>
+  <footer class="modal-foot">
+    <button class="btn" type="button" data-close autofocus>Close</button>
+  </footer>
+</dialog>
+
+<!-- ============ CHANGE PASSWORD ============ -->
+<dialog class="modal" id="passwordModal" aria-labelledby="passwordTitle">
+  <form id="passwordForm">
+    <header class="modal-head">
+      <h2 id="passwordTitle">Change password</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Close">
+        <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+      </button>
+    </header>
+    <div class="modal-body">
+      <label class="field">
+        <span class="field-label">Current password</span>
+        <input type="password" id="currentPassword" autocomplete="current-password" maxlength="256" required autofocus>
+      </label>
+      <label class="field">
+        <span class="field-label">New password</span>
+        <input type="password" id="newPassword" autocomplete="new-password" minlength="8" maxlength="256" required>
+      </label>
+      <p class="hint">At least 8 characters. Other devices signed in to this account are signed out.</p>
+      <p class="form-error" id="passwordError" role="alert" hidden></p>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn btn-primary" id="submitPassword" type="submit">Update password</button>
+    </footer>
+  </form>
+</dialog>
+
+<!-- ============ HISTORY DETAIL ============ -->
+<dialog class="modal modal-wide" id="historyDetailModal" aria-labelledby="historyDetailTitle">
+  <header class="modal-head">
+    <h2 id="historyDetailTitle">Query details</h2>
+    <button class="icon-btn" type="button" data-close aria-label="Close">
+      <svg class="icon" viewBox="0 0 24 24"><use href="#i-close"/></svg>
+    </button>
+  </header>
+  <div class="modal-body" id="historyDetailBody"></div>
+  <footer class="modal-foot">
+    <button class="btn btn-start" id="historyDetailStar" type="button">
+      <svg class="icon" viewBox="0 0 24 24"><use href="#i-star"/></svg> <span id="historyDetailStarLabel">Star</span>
+    </button>
+    <button class="btn" id="historyDetailOpenSql" type="button">
+      <svg class="icon" viewBox="0 0 24 24"><use href="#i-code"/></svg> Open in SQL Workspace
+    </button>
+    <button class="btn btn-primary" id="historyDetailReuse" type="button">Reuse question</button>
+  </footer>
+</dialog>
+
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+<script src="script.js" defer></script>
 </body>
 </html>

@@ -9,3 +9,4 @@ backups/*.bak
 data/*.sqlite
 data/memory/*.sqlite
 data/vectorstore/
+uploads/*.upload
